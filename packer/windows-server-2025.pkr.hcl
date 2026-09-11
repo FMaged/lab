@@ -38,7 +38,7 @@ source "proxmox-iso" "windows_server_2025" {
   }
 
   # -- Installation media --
-  iso_file = "${var.iso_datastore}:iso/${var.win_server_iso_file}"
+  iso_file     = "${var.iso_datastore}:iso/${var.win_server_iso_file}"
   iso_checksum = var.win_server_iso_checksum
 
   # Generated on the fly from the answer file, and the real VirtIO ISO already on
