@@ -8,7 +8,9 @@ down and rebuilt from the repo. It exists to support a career switch from
 Anwendungsentwicklung to Systemintegration.
 
 The reader is a hiring manager, not a customer. Success is a reviewer understanding
-what was built and why in five minutes, and being able to see that it actually runs.
+what was built and why in five minutes. No host exists to run it on yet, so until one
+does the proof is that every layer validates in CI on every push — see the execution
+status decision below.
 
 ## Not in scope
 
@@ -17,13 +19,17 @@ what was built and why in five minutes, and being able to see that it actually r
 - No cloud and no hybrid identity (no Entra ID / Azure AD Connect).
 - No monitoring, logging or backup stack in the first pass.
 - No sysprep / image generalization.
-- Does not touch the existing homelab host. Separate hardware only.
+- No host to run on. The code must not assume one specific machine — see the
+  execution status decision below.
+- Nothing in this lab runs on the development machine. It is a VMware guest with no
+  nested virtualization, 2 GB of RAM and a full disk.
 
 ## Stack
 
 | Part | Choice |
 | --- | --- |
-| Hypervisor | Proxmox VE 9.2 on new, separate hardware |
+| Hypervisor | Proxmox VE 9.2 — target platform, no host available yet |
+| Validation | GitHub Actions — fmt, validate, lint and secret scanning on every push |
 | Image build | Packer — Windows Server 2025 base image with VirtIO drivers and WinRM |
 | Provisioning | Terraform with the bpg/proxmox provider |
 | OS configuration | Windows PowerShell 5.1 |
@@ -128,3 +134,66 @@ problem three gitignored files and two env-var conventions already solve.
 Rejected: baking passwords into the Packer image or its unattend file — the image is
 shared across every clone (see the no-sysprep decision above) and must stay free of
 anything machine- or environment-specific, secrets included.
+
+### The lab is authored and validated now, and executed only if a host appears
+
+Why: there is no Proxmox host, and there may never be one. The development machine
+cannot stand in — it is a VMware guest with no nested virtualization, roughly 300 MB
+of free RAM and a full disk, so not even a single nested VM will boot on it. A plan
+that blocks on hardware produces nothing, so the repo is built to be complete and
+reviewable without ever being applied, and applying it becomes a separate optional
+milestone.
+Rejected: pause until hardware exists — the portfolio piece would stay a folder of
+markdown for an unbounded amount of time, which defeats its purpose.
+Rejected: pivot to Samba AD in containers so it runs on this machine — it would
+execute, but it discards Proxmox, Windows Server, Packer and Group Policy, which are
+exactly the skills the career switch is meant to show. That is a different project.
+
+### CI is the test harness, and it validates but never applies
+
+Why: no layer can be run during development, so the only available feedback is static
+— `terraform fmt` and `validate`, `packer fmt` and `validate`, PSScriptAnalyzer, and
+secret scanning, on every push. It runs in GitHub Actions rather than locally because
+the development machine has about 1 GB of disk free, which does not fit the Terraform
+and Packer binaries or their provider caches.
+This does not weaken the secrets decision above: CI only ever validates, so it holds
+no credentials and no repository secrets are configured. If that ever changes, the
+secrets decision has to be revisited first.
+Rejected: installing the CLIs locally — roughly 600 MB against 1.1 GB free on a disk
+already at 98%.
+Rejected: running the tooling in Docker images — same disk, since the images land in
+`/var/lib/docker` on the same full filesystem.
+
+### The repository is public on GitHub
+
+Why: the deliverable is a link on a job application. A public repo with a passing CI
+badge is the artifact a hiring manager can open in one click, which is the stated
+measure of success.
+Rejected: a private repo shared on request — same code, but it adds a step between
+the reader and the work at exactly the moment their attention is shortest.
+
+### Execution status is stated plainly in the README
+
+Why: the repo will describe a working network it has not yet run. Letting a reader
+infer it has been applied would be a misrepresentation, and it is the kind a
+technical interviewer finds in the first five minutes. Saying so directly turns a
+weakness into evidence of judgement.
+How: the README states what is validated and what is unexecuted, and the wording gets
+updated the moment a proof run lands.
+Rejected: staying quiet about it and showing only the architecture — the risk is
+being read as dishonest rather than as unfinished.
+
+### The proof run is rented hourly bare metal, not purchased hardware
+
+Why: it converts "this should work" into "this ran" for roughly the price of a meal,
+with no hardware to buy, house or keep. Hourly-billed bare metal from a provider such
+as Scaleway or Hetzner can take a Proxmox install, run the whole build once, be
+captured as evidence, and be destroyed the same weekend.
+Note: this is a capstone, not a dependency. Every milestone before it stands on its
+own, and the repo is a complete portfolio piece if it never happens.
+Rejected: buying a host now — the largest cost in the project for a benefit that
+rented metal delivers for a few euros.
+Rejected: nesting Proxmox on the existing homelab host — not available at the moment.
+Worth revisiting if that changes, since it would make the proof run free.
+Rejected: ordinary cloud VMs — nested virtualization is either unavailable or
+unreliable on shared-tenancy instances, which is precisely what this workload needs.
