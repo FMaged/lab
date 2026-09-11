@@ -1,5 +1,5 @@
 # opnsense/
 
-Router and firewall configuration for the lab VLANs. The configuration mechanism
-(config.xml import vs. REST API) is still an open SPIKE in TASKS.md — nothing here
-yet.
+Router and firewall configuration for the lab VLANs, as Terraform resources against
+the browningluke/opnsense provider. See the `terraform-opnsense` skill for
+conventions and constraints.

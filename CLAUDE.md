@@ -20,7 +20,7 @@ from this repo.
 | `packer/` | Windows Server 2025 base image build |
 | `terraform/` | VM provisioning against Proxmox (bpg/proxmox) |
 | `powershell/` | First-boot OS config, AD promotion, domain join, GPOs |
-| `opnsense/` | Router and firewall configuration |
+| `opnsense/` | Router and firewall config (Terraform, browningluke/opnsense provider) |
 | `docs/` | Network and AD design, hardware, conventions, runbook |
 
 ## Conventions
@@ -33,8 +33,10 @@ from this repo.
   style; the rule on top of it here is that every script is idempotent — clones are
   provisioned by running them at first boot, and a failed run is retried, not
   hand-fixed.
-- No secret lands in git: no passwords, no Proxmox API token, no tfvars. The
-  mechanism is still an open SPIKE in `TASKS.md`.
+- No secret lands in git: no passwords, no Proxmox API token, no tfvars. Secrets are
+  env vars and gitignored local var files; PowerShell gets its secrets from
+  Terraform's WinRM provisioner, never from a file on disk. See the decision in
+  `PLAN.md`.
 - Docs are a deliverable. A layer is not done until its section of `docs/runbook.md`
   is filled in.
 

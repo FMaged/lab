@@ -116,15 +116,18 @@ Someone who opens the repo can see what gets built, on what addresses, in what o
   order, link to the runbook.
   Notes:
 
-- [ ] SPIKE: how does OPNsense get configured as code (max 2h)
+- [x] SPIKE: how does OPNsense get configured as code (max 2h)
   **Why:** Milestone 4 needs a repeatable, version-controlled way to apply VLANs,
   interfaces, DHCP and firewall rules — picking the wrong mechanism now means redoing
   the whole opnsense/ layer later.
   **How:** compare config.xml import against the REST API for coverage of VLANs,
   interfaces, DHCP and firewall rules; note any plugin dependencies.
   Output: one decision entry in PLAN.md
+  Notes: researched live — the REST API has full coverage, and a community Terraform
+  provider (browningluke/opnsense) wraps it well enough to keep OPNsense under the
+  same `terraform apply` as everything else. Decision + accepted risk in PLAN.md.
 
-- [ ] SPIKE: how do secrets reach Packer, Terraform and PowerShell (max 2h)
+- [x] SPIKE: how do secrets reach Packer, Terraform and PowerShell (max 2h)
   **Why:** the domain administrator password, the Proxmox API token and the local admin
   password each need to reach a different tool, and none of them can land in git —
   the approach has to work for all three or the layers won't agree.
@@ -132,6 +135,9 @@ Someone who opens the repo can see what gets built, on what addresses, in what o
   secrets manager; check what Packer, Terraform and PowerShell can each consume
   natively.
   Output: one decision entry in PLAN.md
+  Notes: env vars + gitignored tfvars/pkrvars cover Packer and Terraform natively;
+  PowerShell has no equivalent since it runs in-guest, so Terraform's WinRM
+  provisioner hands it secrets as sensitive inline parameters. Decision in PLAN.md.
 
 ## Milestone 2: Proxmox host is installed and reachable as an automation target
 
