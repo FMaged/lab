@@ -232,7 +232,11 @@ written with no way to tell whether any of them is even syntactically sound.
    its own.
 
    Notes: workflow installs PSScriptAnalyzer -RequiredVersion 1.25.0 explicitly, plus
-   powershell/PSScriptAnalyzerSettings.psd1 pinning severities.
+   powershell/PSScriptAnalyzerSettings.psd1 pinning severities. First real push (2026-
+   09-11) failed here twice — a self-scan of the settings file, then a fix attempt that
+   passed -Include to Invoke-ScriptAnalyzer, which doesn't have that parameter (it's
+   Get-ChildItem's). Fixed by filtering with Get-ChildItem and piping into
+   Invoke-ScriptAnalyzer. Full story in the github-actions-ci skill's Gotchas.
 
 6. [x] CI job: secret scanning on every push
    **What:** gitleaks over the full history and every new commit, failing the build on a
@@ -245,7 +249,8 @@ written with no way to tell whether any of them is even syntactically sound.
    the scan would still catch a file committed with `-f`.
 
    Notes: gitleaks/gitleaks-action@v2 with fetch-depth 0; free for public repos, no
-   license secret needed.
+   license secret needed. Failed on the first real push (2026-09-11) — v2 is being
+   retired ahead of GitHub's 2026-09-16 Node 20 removal. Bumped to v3, same inputs.
 
 7. [x] CI job: documentation link check
    **What:** a link checker over every markdown file, failing on a dead relative link.
