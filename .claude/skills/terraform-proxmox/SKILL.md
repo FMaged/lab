@@ -34,6 +34,11 @@ secret is marked `sensitive = true`. Resource and variable naming and VM tags fo
 - **The topology is fixed:** DC01, SRV01, CL01 and the firewall. Adding a VM is a
   change to `PLAN.md` first.
 
+- **This configuration cannot be applied.** There is no Proxmox host, so `plan` and
+  `apply` are unavailable during development. `terraform validate` with
+  `-backend=false` in CI is the only feedback, and it will not catch a wrong VM ID, a
+  missing template or a bad datastore name. Pin bpg/proxmox to an exact version.
+
 ## Conventions
 
 - One `proxmox_virtual_environment_vm` per host, with an explicit `vm_id` from the

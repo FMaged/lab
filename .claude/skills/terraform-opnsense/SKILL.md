@@ -32,6 +32,12 @@ invent one here; if the design is wrong, change the design first.
   Management and Servers VLANs get no DHCP resource — their hosts are static and
   already listed in the address table.
 
+- **This configuration cannot be applied.** There is no OPNsense instance to reach,
+  so `plan` and `apply` are unavailable during development. `terraform validate` with
+  `-backend=false` in CI is the only feedback. Validate passes on resource arguments
+  the API would still reject, so read the provider docs for each resource rather than
+  trusting a green build.
+
 ## Conventions
 
 - Every VLAN interface resource's `vlan_id` and parent interface must match

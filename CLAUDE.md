@@ -4,6 +4,11 @@ A small company network — Proxmox host, Windows Server 2025 image, VMs, Active
 Directory and a routed multi-VLAN network — built entirely as code and rebuildable
 from this repo.
 
+**No host exists yet and nothing here can be run locally.** The development machine is
+a VMware guest with no nested virtualization and a full disk. Every layer is written to
+be checked statically in CI — see Validation below. Do not propose testing by running
+something; that option does not exist.
+
 ## Start here
 
 - `PLAN.md` — goal, stack, and every decision with its reasoning. Read it before
@@ -22,6 +27,27 @@ from this repo.
 | `powershell/` | First-boot OS config, AD promotion, domain join, GPOs |
 | `opnsense/` | Router and firewall config (Terraform, browningluke/opnsense provider) |
 | `docs/` | Network and AD design, hardware, conventions, runbook |
+| `.github/workflows/` | The validation harness — the project's only feedback loop |
+
+## Validation
+
+CI is the only way to find out whether anything here is correct. It validates and never
+applies, so it holds no credentials and no repository secrets are configured — keep it
+that way.
+
+| Layer | Check |
+| --- | --- |
+| `terraform/`, `opnsense/` | `terraform fmt -check` and `terraform validate` (`init -backend=false`) |
+| `packer/` | `packer fmt -check`, `packer init`, `packer validate` |
+| `powershell/` | PSScriptAnalyzer, failing on Error and Warning |
+| whole repo | gitleaks secret scan, markdown link check |
+
+Two rules follow from having no runtime:
+
+- Every commit stays fmt-clean and validate-clean. A red build is the only error
+  message this project gets.
+- Provider and plugin versions are pinned to exact versions, never `~>`. An unpinned
+  constraint means a build can break with no change to the code.
 
 ## Conventions
 

@@ -29,6 +29,12 @@ second scheme here.
 - **WinRM is the handoff point.** The build is finished when Packer can talk WinRM.
   Everything past that belongs to Terraform and `powershell/`.
 
+- **This build cannot be run.** There is no Proxmox host, so `packer build` is not
+  available during development and may never be. `packer fmt`, `packer init` and
+  `packer validate` in CI are the only feedback — write the template to be correct on
+  first read rather than iterating on build output, and pin the Proxmox plugin to an
+  exact version.
+
 ## Conventions
 
 - Target is Proxmox VE 9.2 through the `proxmox-iso` builder; the artifact is a
