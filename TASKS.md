@@ -73,16 +73,17 @@ Someone who opens the repo can see what gets built, on what addresses, in what o
   already written in network-design.md.
   Notes:
 
-- [ ] Write docs/hardware.md — the Proxmox host
+- [x] Write docs/hardware.md — the Proxmox host
   **What:** the target Proxmox host spec and the UEFI/virtualization/NIC prerequisites to
   verify before install.
   **Why:** Milestone 2 needs the hardware bought and installed correctly on the first
   attempt — there's no lab access yet to iterate on a wrong spec.
   **How:** list CPU/RAM/disk/NIC targets and why they're enough for four guests, plus a
   pre-install checklist (VT-x/AMD-V enabled, UEFI boot, NIC passthrough support).
-  - [ ] Target spec and why it is enough for four guests
-  - [ ] UEFI, virtualization and NIC prerequisites to check before install
-  Notes:
+  - [x] Target spec and why it is enough for four guests
+  - [x] UEFI, virtualization and NIC prerequisites to check before install
+  Notes: documented both single-NIC and dual-NIC trunk layouts since the actual host
+  isn't bought yet — narrow to one once hardware is chosen.
 
 - [ ] Write docs/conventions.md
   **What:** the VM and hostname naming scheme, Terraform resource/variable naming, VM
