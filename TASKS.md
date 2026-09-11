@@ -478,7 +478,143 @@ build one on.
 
 ## Milestone 4: OPNsense routes the lab VLANs
 
-<!-- Not planned yet. -->
+The firewall becomes a VM defined in code, a documented manual install, and a rule set
+under `terraform apply`. This milestone also scaffolds the `terraform/` root, because the
+OPNsense VM is the first resource to land in it. Ends when both Terraform roots validate
+green in CI against real resources — no host exists to apply them to.
+
+1. [ ] SPIKE: where exactly does the manual/code boundary fall (max 2h)
+   **Why:** the bootstrap decision in PLAN.md fixes that there is a manual half, but not
+   its size. Interface assignment and interface addressing are core OPNsense settings and
+   may not be exposed as provider resources at all, while VLAN creation, DHCP and rules
+   almost certainly are. Tasks 5, 7, 8 and 9 all change shape depending on the answer, and
+   guessing means writing resources for a provider version that has no such resource.
+   **How:** read the browningluke/opnsense 0.26.0 resource list against the pinned
+   version, not the latest docs, and sort every item in `docs/network-design.md` into
+   manual or code. Note anything the provider claims to support but marks experimental.
+   Output: one decision entry in PLAN.md, and the split that task 5 writes down
+
+2. [ ] Write the firewall policy into docs/network-design.md
+   **What:** a rule table — source, destination, service, and the reason the rule exists —
+   plus the default-deny stance and the outbound NAT behaviour.
+   **Why:** PLAN.md requires least privilege with a reason on every rule, and the
+   `terraform-opnsense` skill forbids inventing network facts in code. Without this table
+   `firewall.tf` becomes the spec, which is exactly backwards and impossible to review.
+   **How:** one row per rule. Work out what a domain member genuinely needs to reach a
+   domain controller — DNS, Kerberos, LDAP, SMB and time — and list those explicitly
+   rather than opening the whole Servers VLAN. State that Management is reachable from no
+   other VLAN.
+
+   2.1. [ ] Client-to-DC service rules, named per service
+   2.2. [ ] Management isolation and the default-deny statement
+   2.3. [ ] Outbound internet access per VLAN, and the NAT rule
+
+   Notes:
+
+3. [ ] Assign guest VMIDs in docs/conventions.md
+   **What:** a fixed VMID for OPNsense, DC01, SRV01 and CL01, in a range clear of the
+   `9000`–`9099` template block.
+   **Why:** the `terraform-proxmox` skill requires every VM to carry an explicit `vm_id`
+   taken from the design docs so a rebuild lands on the same ID, but no document assigns
+   guest VMIDs yet. The OPNsense VM in task 4 is the first one that needs one.
+   **How:** extend the existing conventions file next to the template VMID rule. Keep the
+   numbering related to the VLAN layout so the ID says something about the host.
+
+   Notes:
+
+4. [ ] Scaffold the terraform/ root
+   **What:** `providers.tf`, `variables.tf` and a committed `example.tfvars` for the
+   bpg/proxmox root, which currently holds only a version pin.
+   **Why:** the OPNsense VM lands here per the decision in PLAN.md, and Milestone 5 adds
+   three more guests to the same root. Getting the provider configuration and the variable
+   shape right once means Milestone 5 only adds resources.
+   **How:** provider configured from `PROXMOX_VE_*` environment variables per the secrets
+   decision — no endpoint or token in a committed file. Variables for node name,
+   datastores and the VLAN IDs, every secret marked `sensitive = true`. Naming follows
+   `docs/conventions.md`.
+
+   Notes:
+
+5. [ ] Write terraform/vm-opnsense.tf
+   **What:** the firewall VM — two NICs, one on the WAN bridge and one on the VLAN trunk,
+   with disk, CPU and memory from `docs/hardware.md`, its VMID from task 3 and the `lab`
+   and `role-firewall` tags.
+   **Why:** the rebuild-from-repo claim only holds if the firewall is in code, and this is
+   the VM every other VM depends on for a gateway.
+   **How:** the trunk NIC carries VLANs 10, 20 and 30 tagged, so it is the one interface
+   in the project that must not set a single `vlan_id` — note why in a comment, since the
+   skill otherwise treats an untagged NIC as a bug. Boot from the OPNsense ISO rather than
+   cloning a template; this guest has no Packer image.
+
+   Notes:
+
+6. [ ] Write the manual bootstrap half of the runbook
+   **What:** runbook section 3a — install from ISO, assign WAN and the three VLAN
+   interfaces, set their addresses from the static table, enable the API and create a key.
+   **Why:** PLAN.md makes this boundary explicit rather than apologetic, and this section
+   is what a proof run would be executed from. It is also the only place a reader learns
+   which settings are deliberately not code.
+   **How:** fill in the placeholder using the split from task 1. End the section with the
+   exact environment variables the next half expects, so the handover is unambiguous.
+
+   Notes:
+
+7. [ ] Write the opnsense/ provider configuration and variables
+   **What:** `opnsense/provider.tf` and `opnsense/variables.tf` — the firewall URL and the
+   API credentials read from `OPNSENSE_API_KEY` and `OPNSENSE_API_SECRET`.
+   **Why:** this root has its own state and lifecycle per its skill, so it needs its own
+   provider configuration rather than sharing the Proxmox root's.
+   **How:** credentials from environment variables only, never a file. Keep the pinned
+   `0.26.0` exactly as it is — bumping it is a separate, deliberate commit per
+   `docs/conventions.md`.
+
+   Notes:
+
+8. [ ] Write opnsense/interfaces.tf and opnsense/dhcp.tf
+   **What:** whichever VLAN interface resources the spike found to be code-side, and a Kea
+   DHCP scope serving the Clients VLAN only, pool `10.10.30.100`–`10.10.30.200`.
+   **Why:** DHCP on VLAN 30 is what lets CL01 prove DHCP and domain join together, and
+   VLANs 10 and 20 deliberately get no scope because every host on them is static.
+   **How:** every VLAN ID and parent interface matches `docs/network-design.md` exactly.
+   Hand out DC01 at `10.10.20.10` as the DNS server in the scope — a domain member that
+   resolves through the firewall cannot find a domain controller. That sharpens the DNS
+   paragraph in `docs/network-design.md`, which currently says only that PowerShell sets
+   DNS at first boot; update the doc in the same commit so the two agree.
+
+   8.1. [ ] VLAN interfaces, matching the design exactly
+   8.2. [ ] Kea scope on VLAN 30 with DC01 as the DNS option
+   8.3. [ ] Reconcile the DNS paragraph in docs/network-design.md
+
+   Notes:
+
+9. [ ] Write opnsense/firewall.tf
+   **What:** the aliases, the least-privilege rules from task 2, and outbound NAT for the
+   three lab subnets.
+   **Why:** this is the milestone's actual content and the part of the project that
+   demonstrates network skill rather than tool skill.
+   **How:** aliases for host groups and service ports so a rule reads by name instead of
+   by port number. Every rule gets a `description` saying what it is for, per the skill.
+   Order matters in a filter chain, so keep the file in evaluation order and say so at the
+   top. Nothing here may contradict the table from task 2.
+
+   9.1. [ ] Aliases for hosts and service groups
+   9.2. [ ] Filter rules, in evaluation order, each with a reason
+   9.3. [ ] Outbound NAT to the WAN uplink
+
+   Notes:
+
+10. [ ] Fill in the code half of the runbook and confirm CI is green
+    **What:** runbook section 3b — the environment variables, the apply order for the two
+    Terraform roots, and how to verify each VLAN routes. Plus a check that the Terraform
+    job in CI covers `opnsense/` and `terraform/` now that both hold real resources.
+    **Why:** CLAUDE.md makes a layer unfinished until its runbook section is written, and
+    the two-stage apply from the PLAN.md decision is the kind of ordering that is obvious
+    while writing it and lost a month later.
+    **How:** state plainly that the verification steps have never been executed, per the
+    execution status decision. Confirm the CI matrix picks up both roots and that a
+    deliberately malformed resource actually turns the job red.
+
+    Notes:
 
 ## Milestone 5: Terraform provisions DC01, SRV01 and CL01 from the templates
 
