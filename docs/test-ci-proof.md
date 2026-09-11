@@ -7,5 +7,8 @@ has been observed failing for the right reason.
 
 A dead relative link, to trip the markdown link checker: [nothing here](does-not-exist.md).
 
-AWS's own public placeholder key, used throughout their docs and safe to commit —
-here only to prove gitleaks' AWS rule fires: AKIAIOSFODNN7EXAMPLE
+AWS's own EXAMPLE key turned out to be gitleaks' own allowlisted placeholder (by
+design — it appears in thousands of docs, so gitleaks ignores it to cut noise), so
+it does not prove the rule fires. This string matches the same AWS access-key
+pattern without being that allowlisted value, and is not a real, functioning
+credential: AKIA3TESTNOTREALFAKE
