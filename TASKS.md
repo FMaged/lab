@@ -407,8 +407,11 @@ build one on.
    driver path confirmed real (2k25\amd64, matches the virtio-scsi-single controller
    task 6 will use) rather than assumed. Administrator password in the XML is a
    fixed, non-secret build-time bootstrap value, not the real `local_admin_password`
-   — a provisioner rotates it immediately once WinRM connects (task 8), so the real
-   secret never touches this file. This wasn't spelled out in the task's How; adding
+   — a provisioner rotates it to the real one as the *last* step of the build
+   (task 8), after every other provisioner that needs WinRM has already run;
+   rotating it earlier risks breaking Packer's own WinRM session for the rest of
+   the build. So the real secret never touches this file. This wasn't spelled out
+   in the task's How; adding
    it here since the plan didn't say how the real password reaches the image at all.
 
 5. [x] Write the Windows 11 answer file

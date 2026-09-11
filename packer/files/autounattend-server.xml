@@ -13,7 +13,9 @@
   connect (packer/windows-server-2025.pkr.hcl's `winrm_password` must match it
   exactly). The real, sensitive `local_admin_password` variable is never written to
   this file — the first provisioner in the shared chain rotates the account to that
-  real password immediately after WinRM connects, before anything else runs.
+  real password as the very last provisioner step, after everything else that
+  needs WinRM has already run — rotating it any earlier risks breaking Packer's
+  own WinRM session for the rest of the build.
 -->
 <unattend xmlns="urn:schemas-microsoft-com:unattend">
 
