@@ -98,7 +98,7 @@ Someone who opens the repo can see what gets built, on what addresses, in what o
   Notes: branch/commit section just points at the global git-conventions skill and
   fixes no-ref as the default (solo project, no ticket tracker).
 
-- [ ] Write docs/runbook.md as a skeleton
+- [x] Write docs/runbook.md as a skeleton
   **What:** bare metal to a working domain, ordered, with a placeholder section per layer
   to fill in as each milestone lands.
   **Why:** this is the proof that the whole lab "rebuilds from zero in one documented
