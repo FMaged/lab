@@ -173,7 +173,7 @@ The only feedback loop this project has. Nothing can be run, so the harness that
 the code holds together has to exist before the code does — otherwise three layers get
 written with no way to tell whether any of them is even syntactically sound.
 
-1. [ ] Create the public GitHub repository and push
+1. [x] Create the public GitHub repository and push
    **What:** a public repo with the Milestone 1 work in it, a description, topics, and
    `main` tracking the remote.
    **Why:** PLAN.md makes the public repo the deliverable — the link on a job
@@ -182,7 +182,10 @@ written with no way to tell whether any of them is even syntactically sound.
    **How:** `gh repo create` as public, push `main`, set the description and topics
    (proxmox, terraform, packer, active-directory, windows-server, iac).
 
-   Notes:
+   Notes: user created github.com/FMaged/lab and pushed `main` directly (no `gh` CLI
+   or token available in this environment). Confirmed public via the anonymous
+   GitHub API. Description and topics are still unset — outstanding, needs the
+   GitHub UI or a token, neither available here.
 
 2. [x] Add pinned provider and plugin skeletons so validation has real input
    **What:** `terraform/versions.tf`, `opnsense/versions.tf` and `packer/plugins.pkr.hcl`,
