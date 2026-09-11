@@ -366,7 +366,7 @@ build one on.
    Template VMIDs reserved to 9000-9099, clear of any future guest VMID range. ISO
    filenames are version-pinned too, no "latest" alias.
 
-3. [ ] Write the shared Packer variables and a committed example var file
+3. [x] Write the shared Packer variables and a committed example var file
    **What:** `packer/variables.pkr.hcl` declaring Proxmox connection and node, the
    datastores, ISO paths and checksums, and the local administrator password as
    `sensitive`; plus a committed `packer/example.pkrvars.hcl` with placeholder values.
@@ -377,7 +377,12 @@ build one on.
    `sensitive = true`. Confirm `.gitignore` already excludes `*.pkrvars.hcl` and that the
    example filename does not match the ignore pattern, or it will silently never commit.
 
-   Notes:
+   Notes: the ignore-pattern trap was real — `*.pkrvars.hcl` did swallow
+   example.pkrvars.hcl, needed `!example.pkrvars.hcl` right after it, confirmed with
+   `git add` actually staging the file. Also discovered `packer validate` (unlike
+   `terraform validate`) hard-fails on any variable with no default ("Unset
+   variable") — every variable here has one, including the sensitive ones (empty
+   string / "none" for checksums), so CI can validate with zero real secrets.
 
 4. [ ] Write the Windows Server 2025 answer file
    **What:** `packer/files/autounattend-server.xml` — German locale throughout, UEFI/GPT

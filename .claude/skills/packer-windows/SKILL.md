@@ -64,5 +64,12 @@ second scheme here.
 
 ## Gotchas
 
-<!-- Empty until the build exists (Milestone 3). Anything that costs more than an hour
-to work out goes here, not in a commit message. -->
+- **`packer validate` requires every variable to have a default**, unlike
+  `terraform validate` — a variable with none fails immediately with "Unset
+  variable", even though CI never supplies real values. Every variable in
+  `packer/variables.pkr.hcl`, including the sensitive ones, has an empty-string (or
+  `"none"` for an `iso_checksum`) default for exactly this reason. Real values only
+  ever come from `PKR_VAR_*` at an actual build.
+- `.gitignore`'s `*.pkrvars.hcl` swallows `example.pkrvars.hcl` too — it needs its
+  own `!example.pkrvars.hcl` negation line right after, or the committed example
+  file silently never stages.
