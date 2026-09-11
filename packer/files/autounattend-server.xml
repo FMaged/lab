@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Windows Server 2025, Desktop Experience — unattended install answer file.
+  German (de-DE) throughout, per the locale decision in PLAN.md.
+
+  Does exactly four things, per the packer-windows skill: partition, select the
+  edition, create the local Administrator account, enable WinRM. Everything else —
+  hostname, static address, domain join, GPOs — is a PowerShell provisioner or a
+  later milestone, never this file.
+
+  ADMINISTRATOR PASSWORD BELOW IS NOT A SECRET. It is a fixed, build-time-only
+  bootstrap value that exists only long enough for Packer's WinRM communicator to
+  connect (packer/windows-server-2025.pkr.hcl's `winrm_password` must match it
+  exactly). The real, sensitive `local_admin_password` variable is never written to
+  this file — the first provisioner in the shared chain rotates the account to that
+  real password immediately after WinRM connects, before anything else runs.
+-->
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+
+  <settings pass="windowsPE">
+    <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="amd64"
+      publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+      xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <SetupUILanguage>
+        <UILanguage>de-DE</UILanguage>
+      </SetupUILanguage>
+      <InputLocale>de-DE</InputLocale>
+      <SystemLocale>de-DE</SystemLocale>
+      <UILanguage>de-DE</UILanguage>
+      <UILanguageFallback>de-DE</UILanguageFallback>
+      <UserLocale>de-DE</UserLocale>
+    </component>
+
+    <!--
+      vioscsi is the only driver Setup needs at this point — the source block uses
+      the virtio-scsi-single controller, so without this the disk is invisible and
+      Setup dies at partitioning with no VirtIO storage driver. VirtIO ISO is
+      attached as the second CD-ROM, mounted as E: during WinPE. NetKVM and the rest
+      install later via virtio-win-guest-tools, in the shared provisioner chain.
+    -->
+    <component name="Microsoft-Windows-PnpCustomizationWinPE" processorArchitecture="amd64"
+      publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+      xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <DriverPaths>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="1">
+          <Path>E:\vioscsi\2k25\amd64</Path>
+        </PathAndCredentials>
+      </DriverPaths>
+    </component>
+
+    <component name="Microsoft-Windows-Setup" processorArchitecture="amd64"
+      publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+      xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <UserData>
+        <AcceptEula>true</AcceptEula>
+        <FullName>SILAB</FullName>
+        <Organization>SILAB</Organization>
+      </UserData>
+      <ImageInstall>
+        <OSImage>
+          <!-- Exact image name, not an index — see the Windows 11 SPIKE decision in
+               PLAN.md on why index numbers are not trusted across ISO builds. -->
+          <InstallFrom>
+            <MetaData wcm:action="add">
+              <Key>/IMAGE/NAME</Key>
+              <Value>Windows Server 2025 SERVERSTANDARD</Value>
+            </MetaData>
+          </InstallFrom>
+          <InstallToAvailablePartition>false</InstallToAvailablePartition>
+          <InstallTo>
+            <DiskID>0</DiskID>
+            <PartitionID>4</PartitionID>
+          </InstallTo>
+        </OSImage>
+      </ImageInstall>
+      <!-- UEFI/GPT: EFI system partition, MSR, a small recovery partition, then
+           Windows on the rest of the disk. -->
+      <DiskConfiguration>
+        <Disk wcm:action="add">
+          <DiskID>0</DiskID>
+          <WillWipeDisk>true</WillWipeDisk>
+          <CreatePartitions>
+            <CreatePartition wcm:action="add">
+              <Order>1</Order>
+              <Type>EFI</Type>
+              <Size>260</Size>
+            </CreatePartition>
+            <CreatePartition wcm:action="add">
+              <Order>2</Order>
+              <Type>MSR</Type>
+              <Size>16</Size>
+            </CreatePartition>
+            <CreatePartition wcm:action="add">
+              <Order>3</Order>
+              <Type>Primary</Type>
+              <Size>1024</Size>
+            </CreatePartition>
+            <CreatePartition wcm:action="add">
+              <Order>4</Order>
+              <Type>Primary</Type>
+              <Extend>true</Extend>
+            </CreatePartition>
+          </CreatePartitions>
+          <ModifyPartitions>
+            <ModifyPartition wcm:action="add">
+              <Order>1</Order>
+              <PartitionID>1</PartitionID>
+              <Format>FAT32</Format>
+              <Label>System</Label>
+            </ModifyPartition>
+            <ModifyPartition wcm:action="add">
+              <Order>2</Order>
+              <PartitionID>2</PartitionID>
+            </ModifyPartition>
+            <ModifyPartition wcm:action="add">
+              <Order>3</Order>
+              <PartitionID>3</PartitionID>
+              <Format>NTFS</Format>
+              <Label>Recovery</Label>
+              <TypeID>de94bba4-06d1-4d40-a16a-bfd50179d6ac</TypeID>
+            </ModifyPartition>
+            <ModifyPartition wcm:action="add">
+              <Order>4</Order>
+              <PartitionID>4</PartitionID>
+              <Format>NTFS</Format>
+              <Label>Windows</Label>
+              <Letter>C</Letter>
+            </ModifyPartition>
+          </ModifyPartitions>
+        </Disk>
+      </DiskConfiguration>
+    </component>
+  </settings>
+
+  <settings pass="specialize">
+    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64"
+      publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+      xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <!-- "*" auto-generates a temporary name. The real hostname is set by
+           PowerShell at first boot after cloning — see the identity-comes-later
+           constraint in the packer-windows skill. -->
+      <ComputerName>*</ComputerName>
+      <TimeZone>W. Europe Standard Time</TimeZone>
+    </component>
+    <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64"
+      publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+      xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <InputLocale>de-DE</InputLocale>
+      <SystemLocale>de-DE</SystemLocale>
+      <UILanguage>de-DE</UILanguage>
+      <UserLocale>de-DE</UserLocale>
+    </component>
+  </settings>
+
+  <settings pass="oobeSystem">
+    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64"
+      publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+      xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <OOBE>
+        <HideEULAPage>true</HideEULAPage>
+        <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
+        <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+        <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+        <NetworkLocation>Work</NetworkLocation>
+        <ProtectYourPC>3</ProtectYourPC>
+        <SkipMachineOOBE>true</SkipMachineOOBE>
+        <SkipUserOOBE>true</SkipUserOOBE>
+      </OOBE>
+      <!-- Bootstrap-only password, see the file header. Must match
+           windows-server-2025.pkr.hcl's winrm_password exactly. -->
+      <UserAccounts>
+        <AdministratorPassword>
+          <Value>Pa$$w0rd-PackerBuild!</Value>
+          <PlainText>true</PlainText>
+        </AdministratorPassword>
+      </UserAccounts>
+      <AutoLogon>
+        <Enabled>true</Enabled>
+        <LogonCount>3</LogonCount>
+        <Username>Administrator</Username>
+        <Password>
+          <Value>Pa$$w0rd-PackerBuild!</Value>
+          <PlainText>true</PlainText>
+        </Password>
+      </AutoLogon>
+      <!-- Enables WinRM so Packer's communicator can take over. Nothing else runs
+           from here — provisioners own everything past this point. -->
+      <FirstLogonCommands>
+        <SynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <Description>Enable WinRM</Description>
+          <CommandLine>winrm quickconfig -quiet</CommandLine>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add">
+          <Order>2</Order>
+          <Description>Allow WinRM basic auth and unencrypted traffic for the build only</Description>
+          <CommandLine>powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true; Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true"</CommandLine>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add">
+          <Order>3</Order>
+          <Description>Open the WinRM HTTP port</Description>
+          <CommandLine>netsh advfirewall firewall add rule name="WinRM-HTTP" dir=in action=allow protocol=TCP localport=5985</CommandLine>
+        </SynchronousCommand>
+      </FirstLogonCommands>
+    </component>
+  </settings>
+</unattend>

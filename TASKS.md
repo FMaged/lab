@@ -384,7 +384,7 @@ build one on.
    variable") — every variable here has one, including the sensitive ones (empty
    string / "none" for checksums), so CI can validate with zero real secrets.
 
-4. [ ] Write the Windows Server 2025 answer file
+4. [x] Write the Windows Server 2025 answer file
    **What:** `packer/files/autounattend-server.xml` — German locale throughout, UEFI/GPT
    partitioning, Desktop Experience image selection, the local administrator, and WinRM
    enabled on first boot.
@@ -393,15 +393,23 @@ build one on.
    is what stops the image from accumulating machine-specific state.
    **How:** `Microsoft-Windows-International-Core-WinPE` set to de-DE for UI, input,
    system and user locale in the `windowsPE` pass. GPT layout with an EFI system
-   partition, MSR and Windows partition. Select the Desktop Experience index by its exact
-   image name from the German ISO, not by number. VirtIO storage driver path added so
+   partition, MSR and Windows partition. Select the Desktop Experience image name from
+   the German ISO, not by number. VirtIO storage driver path added so
    Setup can see the disk. WinRM enabled from a `FirstLogonCommands` entry.
 
-   4.1. [ ] Locale, keyboard and timezone, all de-DE
-   4.2. [ ] UEFI/GPT disk layout and Desktop Experience image selection
-   4.3. [ ] Local administrator and WinRM enablement
+   4.1. [x] Locale, keyboard and timezone, all de-DE
+   4.2. [x] UEFI/GPT disk layout and Desktop Experience image selection
+   4.3. [x] Local administrator and WinRM enablement
 
-   Notes:
+   Notes: image name "Windows Server 2025 SERVERSTANDARD" — Desktop Experience is
+   selected by name, not index, but the exact string is still unverified against a
+   real German ISO (same residual-unknown caveat as the Windows 11 SPIKE). vioscsi
+   driver path confirmed real (2k25\amd64, matches the virtio-scsi-single controller
+   task 6 will use) rather than assumed. Administrator password in the XML is a
+   fixed, non-secret build-time bootstrap value, not the real `local_admin_password`
+   — a provisioner rotates it immediately once WinRM connects (task 8), so the real
+   secret never touches this file. This wasn't spelled out in the task's How; adding
+   it here since the plan didn't say how the real password reaches the image at all.
 
 5. [ ] Write the Windows 11 answer file
    **What:** `packer/files/autounattend-client.xml` — the same shape as the server answer
