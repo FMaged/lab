@@ -34,6 +34,12 @@ secret is marked `sensitive = true`. Resource and variable naming and VM tags fo
   place; `powershell/` takes it from there.
 - **The topology is fixed:** DC01, SRV01, CL01 and the firewall. Adding a VM is a
   change to `PLAN.md` first.
+- **The OPNsense VM lives here too**, and it is the exception to most rules on this
+  page. It boots an ISO instead of cloning a template, since it has no Packer image,
+  and it is bootstrapped by hand afterwards — see the bootstrap decision in `PLAN.md`.
+- **This root is applied in two stages.** The firewall VM comes up and is bootstrapped
+  before the Windows guests are worth starting: until it routes there is no gateway, no
+  DHCP and no DNS path. A single blind `apply` of everything is not the intended use.
 
 - **This configuration cannot be applied.** There is no Proxmox host, so `plan` and
   `apply` are unavailable during development. `terraform validate` with
@@ -45,7 +51,10 @@ secret is marked `sensitive = true`. Resource and variable naming and VM tags fo
 - One `proxmox_virtual_environment_vm` per host, with an explicit `vm_id` from the
   address table so a rebuild lands on the same ID every time.
 - Every `network_device` gets an explicit `vlan_id`. An untagged NIC is a bug, not a
-  default.
+  default — with exactly one exception: the OPNsense trunk NIC carries VLANs 10, 20 and
+  30 tagged and therefore sets no `vlan_id` of its own. It is commented as deliberate in
+  `vm-opnsense.tf`. Do not "fix" it, and do not let it become a precedent for any other
+  guest.
 - Read the `plan` before every `apply`. A plan proposing to replace a VM you did not
   intend to touch usually means the base template changed underneath the state.
 

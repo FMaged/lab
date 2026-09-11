@@ -28,6 +28,16 @@ invent one here; if the design is wrong, change the design first.
 - **API key/secret auth**, from `OPNSENSE_API_KEY` / `OPNSENSE_API_SECRET`
   environment variables — never written to a file, per the secrets decision in
   `PLAN.md`.
+- **This root configures a firewall that already exists.** Installing OPNsense,
+  assigning its interfaces, addressing them and enabling the API are a documented manual
+  bootstrap — see the bootstrap decision in `PLAN.md` and section 3a of
+  `docs/runbook.md`. Everything past the API key is code. If a setting turns out not to
+  be exposed as a resource, it moves into the runbook's manual half with a note, never
+  into a shell script wrapped in a provisioner.
+- **Rules are least privilege with a reason on each one.** `docs/network-design.md`
+  carries the policy table; this root implements it. A rule that is not in that table
+  does not belong here, and a broad allow between VLANs contradicts a decision in
+  `PLAN.md`.
 - **DHCP is Kea, and only serves the Clients VLAN** (see `docs/network-design.md`).
   Management and Servers VLANs get no DHCP resource — their hosts are static and
   already listed in the address table.
