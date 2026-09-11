@@ -1,0 +1,21 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+
+# Packer
+packer_cache/
+*.pkrvars.hcl
+packer-manifest.json
+*.box
+
+# Secrets
+*.env
+.env.*
+
+# OS / editor
+.DS_Store
