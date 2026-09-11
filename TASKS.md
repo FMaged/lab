@@ -107,7 +107,7 @@ Someone who opens the repo can see what gets built, on what addresses, in what o
   **How:** one heading per milestone in build order, each with a one-line placeholder.
   Notes:
 
-- [ ] Write the top-level README.md
+- [x] Write the top-level README.md
   **What:** what this lab demonstrates, the architecture in one diagram, and where to
   start reading.
   **Why:** per the goal in PLAN.md, this is the page the reviewer actually opens — success
