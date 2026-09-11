@@ -49,7 +49,7 @@ Someone who opens the repo can see what gets built, on what addresses, in what o
   clear of the existing 192.168.1.0/24 home network per user. DHCP only on the
   Clients VLAN — Mgmt and Servers are static and listed in the table.
 
-- [ ] Write docs/ad-design.md
+- [x] Write docs/ad-design.md
   **What:** forest and domain name, functional level, site name, OU structure with the
   reasoning behind its shape, groups, and the three baseline GPOs with what each one
   enforces.
@@ -58,10 +58,11 @@ Someone who opens the repo can see what gets built, on what addresses, in what o
   decisions made while coding.
   **How:** one section per topic; OU structure gets a short paragraph justifying its
   shape; each GPO gets a one-line "what it enforces and why".
-  - [ ] Forest and domain, functional level, site name
-  - [ ] OU structure and the reasoning behind its shape
-  - [ ] Groups and the three baseline GPOs, each with what it enforces and why
-  Notes:
+  - [x] Forest and domain, functional level, site name
+  - [x] OU structure and the reasoning behind its shape
+  - [x] Groups and the three baseline GPOs, each with what it enforces and why
+  Notes: functional level 2025 (no legacy DC to support). Workstation GPO's logon
+  banner chosen deliberately as the visible proof-point for Milestone 6.
 
 - [ ] Draw the network diagram as Mermaid in docs/
   **What:** a Mermaid diagram showing the VLANs, the firewall, and where DC01/SRV01/CL01
