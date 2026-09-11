@@ -85,7 +85,7 @@ Someone who opens the repo can see what gets built, on what addresses, in what o
   Notes: documented both single-NIC and dual-NIC trunk layouts since the actual host
   isn't bought yet — narrow to one once hardware is chosen.
 
-- [ ] Write docs/conventions.md
+- [x] Write docs/conventions.md
   **What:** the VM and hostname naming scheme, Terraform resource/variable naming, VM
   tags, and branch/commit conventions.
   **Why:** Terraform, PowerShell and git history all need to follow one scheme
@@ -93,9 +93,10 @@ Someone who opens the repo can see what gets built, on what addresses, in what o
   that references it.
   **How:** short reference tables for hostname pattern, Terraform naming pattern and tag
   list, plus a pointer to the git-conventions skill for branch/commit format.
-  - [ ] VM and hostname scheme, Terraform resource and variable naming, VM tags
-  - [ ] Branch and commit conventions
-  Notes:
+  - [x] VM and hostname scheme, Terraform resource and variable naming, VM tags
+  - [x] Branch and commit conventions
+  Notes: branch/commit section just points at the global git-conventions skill and
+  fixes no-ref as the default (solo project, no ticket tracker).
 
 - [ ] Write docs/runbook.md as a skeleton
   **What:** bare metal to a working domain, ordered, with a placeholder section per layer
