@@ -11,7 +11,7 @@ If the work went differently than planned, write it under Notes:
 No Proxmox hardware yet, so this milestone produces the design and the entry point.
 Someone who opens the repo can see what gets built, on what addresses, in what order.
 
-- [ ] Initialize the repository
+- [x] Initialize the repository
   **What:** a git repo with a .gitignore covering Terraform state/plan files, Packer output
   directories and tfvars, plus a LICENSE and a repo description.
   **Why:** every other task writes files into this repo from here on, and secrets (tfvars)
@@ -19,20 +19,21 @@ Someone who opens the repo can see what gets built, on what addresses, in what o
   first commit, not retrofitted later.
   **How:** git init; .gitignore entries for terraform.tfstate*, .terraform/, Packer output
   dirs and *.auto.tfvars; add a LICENSE; set the repo description.
-  - [ ] git init, .gitignore for Terraform state, Packer output and tfvars
-  - [ ] LICENSE and a repo description
-  Notes:
+  - [x] git init, .gitignore for Terraform state, Packer output and tfvars
+  - [x] LICENSE and a repo description
+  Notes: main branch, MIT license. Repo description deferred — no GitHub remote yet;
+  set it when the repo is first pushed.
 
-- [ ] Create the directory layout with a stub README in each layer
+- [x] Create the directory layout with a stub README in each layer
   **What:** top-level folders packer/, terraform/, powershell/, opnsense/, docs/, each with
   a short README stating what will live there.
   **Why:** the repo layout is the first thing a reviewer sees before any code exists — it
   has to communicate the four-layer architecture on its own.
   **How:** mkdir the five directories, drop a one-paragraph README.md in each.
-  - [ ] packer/, terraform/, powershell/, opnsense/, docs/
+  - [x] packer/, terraform/, powershell/, opnsense/, docs/
   Notes:
 
-- [ ] Write docs/network-design.md
+- [x] Write docs/network-design.md
   **What:** VLAN list and purpose, subnet and gateway per VLAN, a static address table for
   DC01/SRV01/firewall interfaces, and DHCP scopes/reservations/options with DNS
   forwarders.
@@ -41,10 +42,12 @@ Someone who opens the repo can see what gets built, on what addresses, in what o
   from these addresses, so it has to exist before any of them are written.
   **How:** one markdown table per VLAN (purpose, subnet, gateway), one static-address
   table, one section for DHCP scopes/reservations/options and DNS forwarders.
-  - [ ] VLAN list and purpose, subnet per VLAN, gateway addresses
-  - [ ] Static address table for DC01, SRV01 and the firewall interfaces
-  - [ ] DHCP scopes, reservations and options, DNS forwarders
-  Notes:
+  - [x] VLAN list and purpose, subnet per VLAN, gateway addresses
+  - [x] Static address table for DC01, SRV01 and the firewall interfaces
+  - [x] DHCP scopes, reservations and options, DNS forwarders
+  Notes: 3 VLANs (10 Mgmt / 20 Servers / 30 Clients), 10.10.x.0/24, chosen to sit
+  clear of the existing 192.168.1.0/24 home network per user. DHCP only on the
+  Clients VLAN — Mgmt and Servers are static and listed in the table.
 
 - [ ] Write docs/ad-design.md
   **What:** forest and domain name, functional level, site name, OU structure with the
