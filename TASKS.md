@@ -64,7 +64,7 @@ Someone who opens the repo can see what gets built, on what addresses, in what o
   Notes: functional level 2025 (no legacy DC to support). Workstation GPO's logon
   banner chosen deliberately as the visible proof-point for Milestone 6.
 
-- [ ] Draw the network diagram as Mermaid in docs/
+- [x] Draw the network diagram as Mermaid in docs/
   **What:** a Mermaid diagram showing the VLANs, the firewall, and where DC01/SRV01/CL01
   sit on the network.
   **Why:** the README links to one diagram as the fastest way for a reviewer to grasp the
