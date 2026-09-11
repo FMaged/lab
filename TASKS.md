@@ -184,7 +184,7 @@ written with no way to tell whether any of them is even syntactically sound.
 
    Notes:
 
-2. [ ] Add pinned provider and plugin skeletons so validation has real input
+2. [x] Add pinned provider and plugin skeletons so validation has real input
    **What:** `terraform/versions.tf`, `opnsense/versions.tf` and `packer/plugins.pkr.hcl`,
    each declaring its provider or plugin at an exact pinned version and nothing else.
    **Why:** a validation job with no files to check is green for the wrong reason. These
@@ -194,9 +194,10 @@ written with no way to tell whether any of them is even syntactically sound.
    `required_plugins` for the Proxmox Packer plugin. Exact `=` constraints, never `~>`.
    Record each chosen version and the date in the file as a comment.
 
-   Notes:
+   Notes: versions checked live — bpg/proxmox 0.112.0, browningluke/opnsense 0.26.0,
+   hashicorp/proxmox Packer plugin 1.2.3, all current as of 2026-09-11.
 
-3. [ ] CI job: Terraform formatting and validation for both roots
+3. [x] CI job: Terraform formatting and validation for both roots
    **What:** a GitHub Actions job running `terraform fmt -check -recursive` and
    `terraform init -backend=false && terraform validate` in `terraform/` and `opnsense/`.
    **Why:** these two roots will hold most of the project's code, and `validate` is the
@@ -204,9 +205,9 @@ written with no way to tell whether any of them is even syntactically sound.
    **How:** `.github/workflows/validate.yml`, matrix over the two directories,
    `hashicorp/setup-terraform`. Backend disabled so init needs no Proxmox credentials.
 
-   Notes:
+   Notes: pinned terraform_version 1.16.1 in setup-terraform for determinism.
 
-4. [ ] CI job: Packer formatting and validation
+4. [x] CI job: Packer formatting and validation
    **What:** `packer fmt -check` and `packer init` plus `packer validate` over `packer/`.
    **Why:** the image build is the layer with the longest feedback loop even when
    hardware exists, so catching a malformed template statically is worth the most here.
@@ -214,9 +215,10 @@ written with no way to tell whether any of them is even syntactically sound.
    block, which does not exist until Milestone 3 — gate the validate step on one being
    present so the job is honest rather than skipped silently.
 
-   Notes:
+   Notes: gate checks for any *.pkr.hcl besides plugins.pkr.hcl and prints an
+   explicit ::notice:: instead of a silent pass when none exists yet.
 
-5. [ ] CI job: PSScriptAnalyzer over powershell/
+5. [x] CI job: PSScriptAnalyzer over powershell/
    **What:** a job running PSScriptAnalyzer across `powershell/`, failing on Error and
    Warning severities.
    **Why:** the PowerShell is the one layer with no compiler and no validator of its own,
@@ -226,9 +228,10 @@ written with no way to tell whether any of them is even syntactically sound.
    Settings file pinning the rules, so a new analyzer release cannot turn the build red on
    its own.
 
-   Notes:
+   Notes: workflow installs PSScriptAnalyzer -RequiredVersion 1.25.0 explicitly, plus
+   powershell/PSScriptAnalyzerSettings.psd1 pinning severities.
 
-6. [ ] CI job: secret scanning on every push
+6. [x] CI job: secret scanning on every push
    **What:** gitleaks over the full history and every new commit, failing the build on a
    hit.
    **Why:** PLAN.md's secrets decision says no credential ever lands in git, and the repo
@@ -238,9 +241,10 @@ written with no way to tell whether any of them is even syntactically sound.
    `main`. Confirm `.gitignore` already covers tfvars and pkrvars — it does — and that
    the scan would still catch a file committed with `-f`.
 
-   Notes:
+   Notes: gitleaks/gitleaks-action@v2 with fetch-depth 0; free for public repos, no
+   license secret needed.
 
-7. [ ] CI job: documentation link check
+7. [x] CI job: documentation link check
    **What:** a link checker over every markdown file, failing on a dead relative link.
    **Why:** docs are a deliverable per PLAN.md, the README is the reviewer's entry point,
    and it links out to seven files. A broken link there is the cheapest possible bad
@@ -248,7 +252,8 @@ written with no way to tell whether any of them is even syntactically sound.
    **How:** lychee or markdown-link-check over `**/*.md`, relative links only, external
    URLs excluded so a third-party outage cannot fail the build.
 
-   Notes:
+   Notes: lycheeverse/lychee-action@v2, excludes any http(s) URL by regex so only
+   relative repo links are checked.
 
 8. [ ] Prove the harness actually fails
    **What:** a throwaway branch that breaks each check in turn — bad HCL, an unformatted
@@ -274,7 +279,7 @@ written with no way to tell whether any of them is even syntactically sound.
 
    Notes:
 
-10. [ ] Record the CI contract in CLAUDE.md and docs/conventions.md
+10. [x] Record the CI contract in CLAUDE.md and docs/conventions.md
     **What:** the rule that every layer must stay fmt-clean and validate-clean, that CI
     holds no secrets, and the command each check runs.
     **Why:** Milestones 3 to 6 are written against this harness. Whoever writes that code
@@ -284,7 +289,9 @@ written with no way to tell whether any of them is even syntactically sound.
     doc gets the formatting and pinning rules. Both stay short — CLAUDE.md is loaded every
     session.
 
-    Notes:
+    Notes: CLAUDE.md's Validation section landed earlier in the plan-revision commit;
+    this task added the matching "Formatting and pinning" section to
+    docs/conventions.md.
 
 ## Milestone 3: Packer builds the Windows Server 2025 template
 

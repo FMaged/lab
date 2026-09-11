@@ -37,6 +37,20 @@ Every VM gets both of:
 Tags are how a reviewer (or a script) can tell at a glance what a VM is for without
 opening its config — Proxmox shows them directly in the VM list.
 
+## Formatting and pinning (CI-enforced)
+
+- `terraform fmt` and `packer fmt` clean at all times, in `terraform/`, `opnsense/`
+  and `packer/` — CI runs both with `-check` and fails the build on drift. Run the
+  formatter before committing rather than finding out from a red build.
+- Every provider and plugin is pinned to an exact version — `version = "0.112.0"`,
+  never `version = "~> 0.112"`. Nothing here can be applied to catch a breaking
+  change early, so an unpinned constraint is a build that can fail on a Tuesday with
+  no code change behind it. See `terraform/versions.tf`, `opnsense/versions.tf` and
+  `packer/plugins.pkr.hcl`.
+- Bumping a pinned version is a deliberate, single-purpose commit — read the
+  changelog first, especially for the OPNsense provider (pre-1.0, no stability
+  guarantee per the decision in `PLAN.md`).
+
 ## Branch and commit conventions
 
 Follow the global `git-conventions` skill as written — Conventional Commits, single

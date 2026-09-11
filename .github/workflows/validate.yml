@@ -1,0 +1,97 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  terraform:
+    name: terraform (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dir: [terraform, opnsense]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.16.1"
+          terraform_wrapper: false
+      - name: terraform fmt
+        working-directory: ${{ matrix.dir }}
+        run: terraform fmt -check -recursive
+      - name: terraform init
+        working-directory: ${{ matrix.dir }}
+        run: terraform init -backend=false
+      - name: terraform validate
+        working-directory: ${{ matrix.dir }}
+        run: terraform validate
+
+  packer:
+    name: packer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-packer@v3
+        with:
+          version: "1.16.0"
+      - name: packer fmt
+        working-directory: packer
+        run: packer fmt -check .
+      - name: packer init
+        working-directory: packer
+        run: packer init .
+      - name: packer validate
+        working-directory: packer
+        run: |
+          # No build template exists until Milestone 3 (plugins.pkr.hcl alone has
+          # nothing to validate). Say so explicitly rather than passing silently.
+          if ls *.pkr.hcl 2>/dev/null | grep -qv '^plugins\.pkr\.hcl$'; then
+            packer validate .
+          else
+            echo "::notice::No Packer build template yet (Milestone 3) — nothing to validate."
+          fi
+
+  powershell:
+    name: PSScriptAnalyzer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: Install-Module -Name PSScriptAnalyzer -RequiredVersion 1.25.0 -Force -Scope CurrentUser
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path powershell -Recurse -Severity Error, Warning -Settings powershell/PSScriptAnalyzerSettings.psd1
+          $results | Format-Table -AutoSize
+          if ($results.Count -gt 0) {
+            Write-Host "::error::PSScriptAnalyzer found $($results.Count) issue(s)."
+            exit 1
+          }
+
+  secrets:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  links:
+    name: markdown link check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lychee link check
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress
+            --exclude '^https?://'
+            '**/*.md'
+          fail: true
