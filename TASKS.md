@@ -462,7 +462,7 @@ build one on.
    supported by the pinned plugin 1.2.3 (added in 1.2.0) during the SPIKE, so no
    surprise here. Build block combining both sources still pending — task 8.
 
-8. [ ] Write the shared provisioners
+8. [x] Write the shared provisioners
    **What:** the provisioner chain both builds run — QEMU guest agent install, Windows
    Updates, and a final cleanup pass.
    **Why:** PLAN.md specifies a patched base image, and the guest agent is what lets
@@ -473,11 +473,19 @@ build one on.
    provisioner must be re-runnable per the skill. No sysprep in the cleanup step — that is
    a standing decision in PLAN.md, so say so in a comment where someone would expect one.
 
-   8.1. [ ] QEMU guest agent
-   8.2. [ ] Windows Updates, with the extra plugin pinned
-   8.3. [ ] Cleanup, explicitly without sysprep
+   8.1. [x] QEMU guest agent
+   8.2. [x] Windows Updates, with the extra plugin pinned
+   8.3. [x] Cleanup, explicitly without sysprep
 
-   Notes:
+   Notes: rgl/windows-update 0.18.4 pinned in plugins.pkr.hcl. Added a 4th step
+   beyond the three listed — rotating the bootstrap password to the real
+   local_admin_password — since nothing in Milestone 3 otherwise specified how the
+   real secret reaches the image; it has to run last, after every WinRM-dependent
+   step, not first (see the correction on tasks 4/5). Guest-tools install and the
+   password rotation are real .ps1 files in packer/files/, not inline HCL strings,
+   since the guest-tools step needs real logic (dynamic CD-ROM discovery) that
+   doesn't fit cleanly inline. The build block combining both sources lives in the
+   new packer/build.pkr.hcl, per the note on task 6.
 
 9. [ ] Turn on packer validate in CI and get it green
    **What:** remove the Milestone 2 gate in `.github/workflows/validate.yml` that skips
