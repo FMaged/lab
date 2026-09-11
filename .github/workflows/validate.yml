@@ -64,8 +64,17 @@ jobs:
       - name: Run PSScriptAnalyzer
         shell: pwsh
         run: |
+          # Invoke-ScriptAnalyzer has no -Include of its own (that parameter belongs to
+          # Get-ChildItem) — filter the file list first, then pipe it in. This also keeps
+          # PSScriptAnalyzerSettings.psd1 itself out of analysis, since -Path/-Recurse
+          # alone would otherwise sweep it up as a .psd1 file.
+          $files = @(Get-ChildItem -Path powershell -Recurse -Include *.ps1, *.psm1)
+          if ($files.Count -eq 0) {
+            Write-Output "::notice::No PowerShell scripts yet under powershell/ — nothing to analyze."
+            exit 0
+          }
           try {
-            $results = @(Invoke-ScriptAnalyzer -Path powershell -Recurse -Include *.ps1, *.psm1 -Severity Error, Warning -Settings powershell/PSScriptAnalyzerSettings.psd1 -ErrorAction Stop)
+            $results = @($files | Invoke-ScriptAnalyzer -Severity Error, Warning -Settings powershell/PSScriptAnalyzerSettings.psd1 -ErrorAction Stop)
           } catch {
             Write-Output "::error::PSScriptAnalyzer threw: $($_.Exception.GetType().FullName): $($_.Exception.Message)"
             exit 1
