@@ -10,7 +10,7 @@ source "proxmox-iso" "windows_server_2025" {
   vm_id                = 9000
   template_name        = "tpl-winsrv2025-de-v1"
   template_description = "Windows Server 2025, Desktop Experience, de-DE. Built by packer/windows-server-2025.pkr.hcl. No sysprep — see PLAN.md."
-  tags                  = "lab;packer;winsrv2025"
+  tags                 = "lab;packer;winsrv2025"
 
   # -- Hardware shape --
   machine = "q35"

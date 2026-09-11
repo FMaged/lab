@@ -11,6 +11,18 @@ must stay fmt-clean and validate-clean against it.
 
 ## Conventions
 
+- **Checking `fmt` before pushing, without installing Terraform or Packer:** both
+  tools' `fmt` share the exact same HCL2 formatter (`hashicorp/hcl`'s `hclwrite`),
+  so `terraform fmt` also correctly formats `.pkr.hcl` files — they just have to be
+  named `.tf` while it runs, since `terraform fmt` rejects any other extension.
+  Download the `terraform` zip for `linux_amd64` straight from
+  `releases.hashicorp.com` into the scratchpad (~120 MB unpacked, well inside the
+  ~1 GB free), copy the target `.hcl`/`.pkr.hcl` files there under a `.tf` name,
+  run `terraform fmt -diff` to see what's wrong or plain `fmt` to fix it, copy the
+  result back over the real files, then delete the whole scratch directory
+  (binary included) so nothing permanent lands on the 98%-full disk. This is how
+  Milestone 3's `tags` alignment bug in the two Packer source files was actually
+  found, after two blind guesses at the alignment by eye both missed it.
 - Every job checks out with `actions/checkout@v7` — GitHub removes Node 20 from
   Actions runners on 2026-09-16, and older major versions of both `checkout` and
   several other actions used here (`hashicorp/setup-terraform`, `hashicorp/setup-packer`)

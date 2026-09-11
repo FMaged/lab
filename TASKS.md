@@ -487,7 +487,7 @@ build one on.
    doesn't fit cleanly inline. The build block combining both sources lives in the
    new packer/build.pkr.hcl, per the note on task 6.
 
-9. [ ] Turn on packer validate in CI and get it green
+9. [x] Turn on packer validate in CI and get it green
    **What:** remove the Milestone 2 gate in `.github/workflows/validate.yml` that skips
    `packer validate` when no build template exists, so both builds are validated on every
    push.
@@ -497,6 +497,17 @@ build one on.
    **How:** delete the conditional and its notice, leaving a plain `packer validate .`.
    Confirm the job actually goes red for a malformed block before trusting it, the same way
    Milestone 2 task 8 proved the rest of the harness.
+
+   Notes: gate removed, and the "goes red for a real problem" proof happened
+   organically rather than as a staged exercise — the very first real run against
+   tasks 6-8's actual HCL failed on `packer fmt` (a one-space alignment bug in
+   `tags` in both source files, found by temporarily borrowing `terraform fmt` —
+   see the new convention in the github-actions-ci skill) and on `gitleaks`
+   (flagged the documented-non-secret bootstrap password, fixed with a scoped
+   `.gitleaks.toml` allowlist). Stronger evidence than a synthetic malformed-block
+   test, since these were genuine mistakes in the real templates, not manufactured
+   ones. `terraform`/`opnsense`/`PSScriptAnalyzer`/link-check all stayed green
+   throughout, confirming the failures were correctly attributed to `packer` only.
 
    Notes:
 

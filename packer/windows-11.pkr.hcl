@@ -10,7 +10,7 @@ source "proxmox-iso" "windows_11" {
   vm_id                = 9001
   template_name        = "tpl-win11-de-v1"
   template_description = "Windows 11 Pro, de-DE. Built by packer/windows-11.pkr.hcl. No sysprep — see PLAN.md."
-  tags                  = "lab;packer;win11"
+  tags                 = "lab;packer;win11"
 
   # -- Hardware shape --
   # Same shape as windows-server-2025.pkr.hcl, plus TPM 2.0 and Secure Boot, which
