@@ -64,10 +64,15 @@ jobs:
       - name: Run PSScriptAnalyzer
         shell: pwsh
         run: |
-          $results = Invoke-ScriptAnalyzer -Path powershell -Recurse -Include *.ps1, *.psm1 -Severity Error, Warning -Settings powershell/PSScriptAnalyzerSettings.psd1
+          try {
+            $results = @(Invoke-ScriptAnalyzer -Path powershell -Recurse -Include *.ps1, *.psm1 -Severity Error, Warning -Settings powershell/PSScriptAnalyzerSettings.psd1 -ErrorAction Stop)
+          } catch {
+            Write-Output "::error::PSScriptAnalyzer threw: $($_.Exception.GetType().FullName): $($_.Exception.Message)"
+            exit 1
+          }
           $results | Format-Table -AutoSize
           if ($results.Count -gt 0) {
-            Write-Host "::error::PSScriptAnalyzer found $($results.Count) issue(s)."
+            Write-Output "::error::PSScriptAnalyzer found $($results.Count) issue(s)."
             exit 1
           }
 
