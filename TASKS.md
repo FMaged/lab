@@ -324,15 +324,153 @@ written with no way to tell whether any of them is even syntactically sound.
     this task added the matching "Formatting and pinning" section to
     docs/conventions.md.
 
-## Milestone 3: Packer builds the Windows Server 2025 template
+## Milestone 3: Packer defines the Windows Server 2025 and Windows 11 templates
 
-<!-- Not planned yet. Ends at validated, not built — see the plan revision above. -->
+Two templates every later layer clones from: a Windows Server 2025 Desktop Experience
+image for DC01 and SRV01, and a Windows 11 image for CL01. Both German, both with VirtIO
+drivers and WinRM, neither generalized. The milestone ends when `packer validate` runs
+green in CI on real build blocks — not when an image exists, because no host exists to
+build one on.
+
+1. [ ] SPIKE: what does a Windows 11 unattended install actually require now (max 2h)
+   **Why:** task 5 cannot be written without this. Windows 11 setup enforces TPM 2.0 and
+   Secure Boot, and the local-account path through OOBE has moved more than once across
+   releases — the `BypassNRO` route in particular stopped working in a recent build.
+   Guessing here produces an answer file that hangs at a screen nobody can see, and with
+   no host to test on that error would sit undetected until the proof run.
+   **How:** confirm against current Microsoft documentation which `oobeSystem` settings
+   create a local account without a Microsoft account, whether the hardware checks are
+   satisfied by giving the VM a real TPM and Secure Boot rather than registry bypasses,
+   and which image index the German ISO exposes for Windows 11 Pro.
+   Output: one decision entry in PLAN.md
+
+2. [ ] Add template naming and ISO conventions to docs/conventions.md
+   **What:** the name each template gets in Proxmox, where installation and VirtIO ISOs
+   live on the host, and the rule for what happens when an image is rebuilt.
+   **Why:** the `packer-windows` skill explicitly defers naming to `docs/conventions.md`,
+   and that file has no template section yet. Milestone 5 clones these templates by name,
+   so the name is an interface between two layers and cannot be invented twice.
+   **How:** extend the existing conventions file with a template table, an ISO datastore
+   path convention, and the "a changed image is a new template, never an edit" rule the
+   skill already states — the conventions file is where it belongs.
+
+   Notes:
+
+3. [ ] Write the shared Packer variables and a committed example var file
+   **What:** `packer/variables.pkr.hcl` declaring Proxmox connection and node, the
+   datastores, ISO paths and checksums, and the local administrator password as
+   `sensitive`; plus a committed `packer/example.pkrvars.hcl` with placeholder values.
+   **Why:** the secrets decision in PLAN.md routes real values through `PKR_VAR_*` and
+   keeps `*.pkrvars.hcl` out of git, which leaves a reader no way to know what to set. A
+   committed example file is how that gap gets closed without shipping a credential.
+   **How:** one `variable` block per input with a description and type. Mark the password
+   `sensitive = true`. Confirm `.gitignore` already excludes `*.pkrvars.hcl` and that the
+   example filename does not match the ignore pattern, or it will silently never commit.
+
+   Notes:
+
+4. [ ] Write the Windows Server 2025 answer file
+   **What:** `packer/files/autounattend-server.xml` — German locale throughout, UEFI/GPT
+   partitioning, Desktop Experience image selection, the local administrator, and WinRM
+   enabled on first boot.
+   **Why:** this is the file that makes the install unattended, and per the skill it is
+   allowed to do only four things. Everything else is a provisioner, so keeping it narrow
+   is what stops the image from accumulating machine-specific state.
+   **How:** `Microsoft-Windows-International-Core-WinPE` set to de-DE for UI, input,
+   system and user locale in the `windowsPE` pass. GPT layout with an EFI system
+   partition, MSR and Windows partition. Select the Desktop Experience index by its exact
+   image name from the German ISO, not by number. VirtIO storage driver path added so
+   Setup can see the disk. WinRM enabled from a `FirstLogonCommands` entry.
+
+   4.1. [ ] Locale, keyboard and timezone, all de-DE
+   4.2. [ ] UEFI/GPT disk layout and Desktop Experience image selection
+   4.3. [ ] Local administrator and WinRM enablement
+
+   Notes:
+
+5. [ ] Write the Windows 11 answer file
+   **What:** `packer/files/autounattend-client.xml` — the same shape as the server answer
+   file, plus whatever the spike in task 1 determined is needed for a local account and
+   the hardware checks.
+   **Why:** CL01 is the machine that demonstrates domain join and a GPO actually applying,
+   so this is the answer file the visible proof depends on.
+   **How:** start from the server answer file, change the image selection to Windows 11
+   Pro, and apply the spike's findings. Do not copy registry bypasses found in forum posts
+   without understanding them — the VM gets a real TPM and Secure Boot in task 7, which is
+   the supported path.
+
+   Notes:
+
+6. [ ] Write the Windows Server 2025 source and build block
+   **What:** `packer/windows-server-2025.pkr.hcl` — a `proxmox-iso` source producing a
+   Proxmox VM template, with the installation ISO and the VirtIO driver ISO both attached.
+   **Why:** this is the artifact DC01 and SRV01 clone from, and per the skill the build is
+   finished the moment Packer can reach WinRM.
+   **How:** `q35` machine type with OVMF firmware and an EFI disk, `virtio-scsi-single`
+   controller, a VirtIO network adapter, and the answer file delivered as an additional
+   ISO. WinRM communicator with a generous timeout, since a German ISO installing updates
+   is slow. Tags and template name from `docs/conventions.md`.
+
+   Notes:
+
+7. [ ] Write the Windows 11 source and build block with TPM and Secure Boot
+   **What:** `packer/windows-11.pkr.hcl` — the client source, adding a TPM 2.0 device and
+   Secure Boot to the firmware configuration.
+   **Why:** Windows 11 Setup refuses to install without both, and giving the VM real
+   virtual hardware is the supported way past that rather than disabling the checks.
+   **How:** same shape as task 6, plus the plugin's TPM configuration block pointing at a
+   storage pool for TPM state, and Secure Boot enabled on the EFI disk. Confirm the pinned
+   plugin version actually supports the TPM block before relying on it — if it does not,
+   that is a version bump commit of its own, not a workaround.
+
+   Notes:
+
+8. [ ] Write the shared provisioners
+   **What:** the provisioner chain both builds run — QEMU guest agent install, Windows
+   Updates, and a final cleanup pass.
+   **Why:** PLAN.md specifies a patched base image, and the guest agent is what lets
+   Proxmox and Terraform see a VM's address and shut it down cleanly. Without it Milestone
+   5 has no reliable way to tell when a clone has finished booting.
+   **How:** a Windows Update provisioner needs a second Packer plugin, so pin it exactly in
+   `plugins.pkr.hcl` alongside the Proxmox one and record why it is there. Every
+   provisioner must be re-runnable per the skill. No sysprep in the cleanup step — that is
+   a standing decision in PLAN.md, so say so in a comment where someone would expect one.
+
+   8.1. [ ] QEMU guest agent
+   8.2. [ ] Windows Updates, with the extra plugin pinned
+   8.3. [ ] Cleanup, explicitly without sysprep
+
+   Notes:
+
+9. [ ] Turn on packer validate in CI and get it green
+   **What:** remove the Milestone 2 gate in `.github/workflows/validate.yml` that skips
+   `packer validate` when no build template exists, so both builds are validated on every
+   push.
+   **Why:** that gate was written to be honest while `packer/` held only a plugin pin. Once
+   real build blocks exist it stops protecting anything and starts hiding regressions in
+   the one layer with no other feedback available.
+   **How:** delete the conditional and its notice, leaving a plain `packer validate .`.
+   Confirm the job actually goes red for a malformed block before trusting it, the same way
+   Milestone 2 task 8 proved the rest of the harness.
+
+   Notes:
+
+10. [ ] Fill in the image build section of docs/runbook.md
+    **What:** the ordered steps to produce both templates on a real host — upload the ISOs,
+    set the `PKR_VAR_*` values, run each build, confirm the templates appear.
+    **Why:** CLAUDE.md makes a layer unfinished until its runbook section is written, and
+    this section is what a proof run would actually be executed from. Writing it now, while
+    the build blocks are fresh, is the difference between a runbook and a reconstruction.
+    **How:** fill the existing placeholder section. Mark clearly that these steps have never
+    been executed, consistent with the execution status decision in PLAN.md.
+
+    Notes:
 
 ## Milestone 4: OPNsense routes the lab VLANs
 
 <!-- Not planned yet. -->
 
-## Milestone 5: Terraform provisions DC01, SRV01 and CL01 from the template
+## Milestone 5: Terraform provisions DC01, SRV01 and CL01 from the templates
 
 <!-- Not planned yet. -->
 
