@@ -156,26 +156,159 @@ Someone who opens the repo can see what gets built, on what addresses, in what o
     PowerShell has no equivalent since it runs in-guest, so Terraform's WinRM
     provisioner hands it secrets as sensitive inline parameters. Decision in PLAN.md.
 
-## Milestone 2: Proxmox host is installed and reachable as an automation target
+<!--
+PLAN REVISION — 2026-09-11
+No Proxmox host exists and there may never be one, and the development machine cannot
+stand in for it (VMware guest, no nested virtualization, full disk). The old Milestone 2
+"Proxmox host is installed and reachable as an automation target" is therefore dropped as
+a prerequisite and folded into the optional proof run at the end. Milestones 3, 4 and 5
+keep their numbers and their subjects — the project skills reference them. What changed is
+that each one now ends at "validated in CI", not "applied to a host".
+See the execution status and CI decisions in PLAN.md.
+-->
 
-<!-- Not planned yet. Needs hardware. -->
+## Milestone 2: Every layer validates in CI on every push, and the repo is public
 
-## Milestone 3: Packer produces a Windows Server 2025 template
+The only feedback loop this project has. Nothing can be run, so the harness that proves
+the code holds together has to exist before the code does — otherwise three layers get
+written with no way to tell whether any of them is even syntactically sound.
 
-<!-- Not planned yet. -->
+1. [ ] Create the public GitHub repository and push
+   **What:** a public repo with the Milestone 1 work in it, a description, topics, and
+   `main` tracking the remote.
+   **Why:** PLAN.md makes the public repo the deliverable — the link on a job
+   application. Nothing in this milestone can be tested until Actions has somewhere to
+   run, and task 1.2 left the repo description open pending exactly this.
+   **How:** `gh repo create` as public, push `main`, set the description and topics
+   (proxmox, terraform, packer, active-directory, windows-server, iac).
+
+   Notes:
+
+2. [ ] Add pinned provider and plugin skeletons so validation has real input
+   **What:** `terraform/versions.tf`, `opnsense/versions.tf` and `packer/plugins.pkr.hcl`,
+   each declaring its provider or plugin at an exact pinned version and nothing else.
+   **Why:** a validation job with no files to check is green for the wrong reason. These
+   three files also settle the version pinning the OPNsense decision in PLAN.md
+   explicitly requires, before any resource is written against a version that might move.
+   **How:** `required_providers` for bpg/proxmox and browningluke/opnsense, and
+   `required_plugins` for the Proxmox Packer plugin. Exact `=` constraints, never `~>`.
+   Record each chosen version and the date in the file as a comment.
+
+   Notes:
+
+3. [ ] CI job: Terraform formatting and validation for both roots
+   **What:** a GitHub Actions job running `terraform fmt -check -recursive` and
+   `terraform init -backend=false && terraform validate` in `terraform/` and `opnsense/`.
+   **Why:** these two roots will hold most of the project's code, and `validate` is the
+   only thing that will ever catch a bad resource argument, since nothing can be applied.
+   **How:** `.github/workflows/validate.yml`, matrix over the two directories,
+   `hashicorp/setup-terraform`. Backend disabled so init needs no Proxmox credentials.
+
+   Notes:
+
+4. [ ] CI job: Packer formatting and validation
+   **What:** `packer fmt -check` and `packer init` plus `packer validate` over `packer/`.
+   **Why:** the image build is the layer with the longest feedback loop even when
+   hardware exists, so catching a malformed template statically is worth the most here.
+   **How:** same workflow, `hashicorp/setup-packer`. `packer validate` needs a build
+   block, which does not exist until Milestone 3 — gate the validate step on one being
+   present so the job is honest rather than skipped silently.
+
+   Notes:
+
+5. [ ] CI job: PSScriptAnalyzer over powershell/
+   **What:** a job running PSScriptAnalyzer across `powershell/`, failing on Error and
+   Warning severities.
+   **Why:** the PowerShell is the one layer with no compiler and no validator of its own,
+   and it is the layer that will run unattended at first boot with nobody watching. Static
+   analysis is the only safety net it gets before a proof run.
+   **How:** `Invoke-ScriptAnalyzer -Path powershell/ -Recurse -Severity Error,Warning`.
+   Settings file pinning the rules, so a new analyzer release cannot turn the build red on
+   its own.
+
+   Notes:
+
+6. [ ] CI job: secret scanning on every push
+   **What:** gitleaks over the full history and every new commit, failing the build on a
+   hit.
+   **Why:** PLAN.md's secrets decision says no credential ever lands in git, and the repo
+   is public, so that rule needs a machine enforcing it rather than discipline. A leaked
+   Proxmox token in a public portfolio repo is the single worst outcome available here.
+   **How:** the gitleaks action in the same workflow, scanning full history on push to
+   `main`. Confirm `.gitignore` already covers tfvars and pkrvars — it does — and that
+   the scan would still catch a file committed with `-f`.
+
+   Notes:
+
+7. [ ] CI job: documentation link check
+   **What:** a link checker over every markdown file, failing on a dead relative link.
+   **Why:** docs are a deliverable per PLAN.md, the README is the reviewer's entry point,
+   and it links out to seven files. A broken link there is the cheapest possible bad
+   impression.
+   **How:** lychee or markdown-link-check over `**/*.md`, relative links only, external
+   URLs excluded so a third-party outage cannot fail the build.
+
+   Notes:
+
+8. [ ] Prove the harness actually fails
+   **What:** a throwaway branch that breaks each check in turn — bad HCL, an unformatted
+   file, a PowerShell analyzer violation, a fake credential, a dead link — confirming each
+   job goes red, then deleted without merging.
+   **Why:** an untested test harness is worth nothing, and this one is the project's only
+   evidence of correctness. A job that is silently skipping or passing on an empty
+   directory looks identical to a working one until the moment it matters.
+   **How:** one commit per broken check on a branch, screenshot or note each red run, then
+   delete the branch. Record in the Notes which check caught what.
+
+   Notes:
+
+9. [ ] Add the CI badge and an execution status section to README.md
+   **What:** the workflow status badge at the top, and a short section stating exactly
+   what is validated and what has never been run on real hardware.
+   **Why:** PLAN.md requires the execution status to be stated plainly. The badge and that
+   paragraph together are what stop a reviewer from either over-reading the repo as a
+   running system or dismissing it as untested.
+   **How:** badge from the Actions workflow, then a short section listing what CI checks
+   and one sentence saying the lab has not yet been applied to a host. Keep the wording
+   ready to update when the proof run lands.
+
+   Notes:
+
+10. [ ] Record the CI contract in CLAUDE.md and docs/conventions.md
+    **What:** the rule that every layer must stay fmt-clean and validate-clean, that CI
+    holds no secrets, and the command each check runs.
+    **Why:** Milestones 3 to 6 are written against this harness. Whoever writes that code
+    needs to know the checks exist and what they enforce, without reading the workflow
+    file to find out.
+    **How:** a short Validation section in CLAUDE.md with the commands; the conventions
+    doc gets the formatting and pinning rules. Both stay short — CLAUDE.md is loaded every
+    session.
+
+    Notes:
+
+## Milestone 3: Packer builds the Windows Server 2025 template
+
+<!-- Not planned yet. Ends at validated, not built — see the plan revision above. -->
 
 ## Milestone 4: OPNsense routes the lab VLANs
 
 <!-- Not planned yet. -->
 
-## Milestone 5: Terraform clones DC01 and PowerShell promotes it to a domain controller
+## Milestone 5: Terraform provisions DC01, SRV01 and CL01 from the template
+
+<!-- Not planned yet. -->
+
+## Milestone 6: PowerShell brings up AD DS, DNS, DHCP, the OU structure and the GPOs
 
 <!-- Not planned yet. The PowerShell does not exist yet — it is written here, not reused. -->
 
-## Milestone 6: SRV01 and CL01 join the domain and the baseline GPOs are seen applying
+## Milestone 7: The repo reads as a finished portfolio piece
 
-<!-- Not planned yet. -->
+<!-- Not planned yet. Runbook complete end to end, diagrams current, README honest about
+     execution status. This is the last milestone that needs no hardware — the project is
+     a complete deliverable when it lands. -->
 
-## Milestone 7: The whole lab rebuilds from zero in one documented pass
+## Milestone 8: The lab is applied once on rented bare metal and the evidence is captured
 
-<!-- Not planned yet. -->
+<!-- Not planned yet, and optional by design. Everything above stands without it.
+     Revisit sooner if the existing homelab host frees up, which would make it free. -->
