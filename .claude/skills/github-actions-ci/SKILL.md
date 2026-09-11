@@ -17,9 +17,11 @@ must stay fmt-clean and validate-clean against it.
   are Node-20-only as of this writing. `checkout` has a Node-24 major (v7); the two
   HashiCorp actions do not yet — there is nothing to pin to until upstream ships one,
   so this is a known, unresolved risk, not a gap to fix now.
-- A check that cannot run yet (`packer validate` before a build template exists in
-  Milestone 3) prints an explicit `::notice::` explaining why, never a silent skip —
-  see the packer job. A silently-green job for the wrong reason is worse than no job.
+- A check that cannot run yet prints an explicit `::notice::` explaining why, never
+  a silent skip — a silently-green job for the wrong reason is worse than no job.
+  This applied to `packer validate` through Milestone 2 (no build template existed
+  yet); Milestone 3 added real build blocks and removed that gate, so it now runs
+  unconditionally like every other check.
 - `Invoke-ScriptAnalyzer` has **no `-Include` parameter** — that belongs to
   `Get-ChildItem`. To restrict analysis to `*.ps1`/`*.psm1` (and keep
   `PSScriptAnalyzerSettings.psd1` itself out of analysis — `-Path powershell -Recurse`

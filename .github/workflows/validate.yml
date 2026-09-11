@@ -45,14 +45,7 @@ jobs:
         run: packer init .
       - name: packer validate
         working-directory: packer
-        run: |
-          # No build template exists until Milestone 3 (plugins.pkr.hcl alone has
-          # nothing to validate). Say so explicitly rather than passing silently.
-          if ls *.pkr.hcl 2>/dev/null | grep -qv '^plugins\.pkr\.hcl$'; then
-            packer validate .
-          else
-            echo "::notice::No Packer build template yet (Milestone 3) — nothing to validate."
-          fi
+        run: packer validate .
 
   powershell:
     name: PSScriptAnalyzer
