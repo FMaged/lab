@@ -1,13 +1,18 @@
 ---
 name: packer-windows
-description: Conventions for this repo's Packer build of the Windows Server 2025 base image — HCL layout under packer/, the proxmox-iso builder, VirtIO driver injection, the autounattend.xml that enables WinRM, and the no-sysprep rule. Use when writing or changing anything under packer/, when the user mentions Packer, .pkr.hcl, autounattend, the base image or the golden template, or when a build hangs at WinRM connect. Not for provisioning VMs from the finished template — that is Terraform, see terraform-proxmox.
+description: Conventions for this repo's two Packer images — Windows Server 2025 Desktop Experience and Windows 11 — covering HCL layout under packer/, the proxmox-iso builder, VirtIO driver injection, the German autounattend.xml files that enable WinRM, TPM and Secure Boot for the client, and the no-sysprep rule. Use when writing or changing anything under packer/, when the user mentions Packer, .pkr.hcl, autounattend, a base image or golden template, the client image, or when a build hangs at WinRM connect. Not for provisioning VMs from the finished templates — that is Terraform, see terraform-proxmox.
 ---
 
 # Packer conventions for the SI lab
 
-Builds the single Windows Server 2025 template that every VM is cloned from. The
-image stays minimal on purpose: VirtIO drivers, WinRM, updates. Anything a first-boot
-PowerShell script can do instead does not belong in the image.
+Builds the two templates every VM is cloned from: Windows Server 2025 Desktop
+Experience for DC01 and SRV01, and Windows 11 for CL01. Both images stay minimal on
+purpose — VirtIO drivers, WinRM, updates. Anything a first-boot PowerShell script can
+do instead does not belong in the image.
+
+The two builds share everything except installation media and firmware shape. When a
+change applies to both, change both in the same commit; they are a matched pair, and a
+client image that drifts from the server image is how an unreproducible bug starts.
 
 ## Layout
 
@@ -28,7 +33,15 @@ second scheme here.
   PowerShell at first boot, not baked in. The image ships with none of them.
 - **WinRM is the handoff point.** The build is finished when Packer can talk WinRM.
   Everything past that belongs to Terraform and `powershell/`.
-
+- **German throughout.** Both answer files set de-DE for UI, input, system and user
+  locale, and Central European time. Locale is fixed at install time — changing it
+  later is a rebuild, not a setting. Expect German error text when debugging.
+- **Desktop Experience, not Server Core.** The GUI consoles are what produce the
+  screenshots that serve as this project's evidence. Do not "optimize" the image by
+  switching to Core.
+- **The client needs real virtual TPM 2.0 and Secure Boot.** Windows 11 Setup enforces
+  both. Give the VM the hardware rather than disabling the checks with registry edits
+  copied from a forum — the supported path is the one worth demonstrating.
 - **This build cannot be run.** There is no Proxmox host, so `packer build` is not
   available during development and may never be. `packer fmt`, `packer init` and
   `packer validate` in CI are the only feedback — write the template to be correct on

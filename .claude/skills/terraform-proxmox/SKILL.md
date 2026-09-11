@@ -1,11 +1,12 @@
 ---
 name: terraform-proxmox
-description: Conventions for this repo's Terraform against Proxmox with the bpg/proxmox provider — layout under terraform/, cloning DC01/SRV01/CL01 from the Packer template, VLAN-tagged NICs, static addressing taken from docs/network-design.md, and the handoff to first-boot PowerShell. Use when writing or changing anything under terraform/, when the user mentions Terraform, .tf files, tfvars, terraform plan or apply, the bpg provider, or provisioning a lab VM. Not for building the base image (see packer-windows) and not for OPNsense configuration.
+description: Conventions for this repo's Terraform against Proxmox with the bpg/proxmox provider — layout under terraform/, cloning DC01/SRV01/CL01 from the Packer templates, VLAN-tagged NICs, static addressing taken from docs/network-design.md, and the handoff to first-boot PowerShell. Use when writing or changing anything under terraform/, when the user mentions Terraform, .tf files, tfvars, terraform plan or apply, the bpg provider, or provisioning a lab VM. Not for building the base image (see packer-windows) and not for OPNsense configuration.
 ---
 
 # Terraform conventions for the SI lab
 
-Clones VMs from the Packer template and hands each one to PowerShell. Terraform owns
+Clones VMs from the Packer templates and hands each one to PowerShell. DC01 and
+SRV01 come from the Windows Server 2025 template, CL01 from the Windows 11 one. Terraform owns
 the VM shape — CPU, memory, disks, NICs, VLAN tags, VM IDs — and nothing inside the
 guest.
 
