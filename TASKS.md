@@ -445,7 +445,7 @@ build one on.
    present but pre_enrolled_keys = false — Secure Boot is task 7's addition, not
    Server's requirement.
 
-7. [ ] Write the Windows 11 source and build block with TPM and Secure Boot
+7. [x] Write the Windows 11 source and build block with TPM and Secure Boot
    **What:** `packer/windows-11.pkr.hcl` — the client source, adding a TPM 2.0 device and
    Secure Boot to the firmware configuration.
    **Why:** Windows 11 Setup refuses to install without both, and giving the VM real
@@ -455,7 +455,9 @@ build one on.
    plugin version actually supports the TPM block before relying on it — if it does not,
    that is a version bump commit of its own, not a workaround.
 
-   Notes:
+   Notes: vm_id 9001. tpm_config and efi_config's pre_enrolled_keys confirmed
+   supported by the pinned plugin 1.2.3 (added in 1.2.0) during the SPIKE, so no
+   surprise here. Build block combining both sources still pending — task 8.
 
 8. [ ] Write the shared provisioners
    **What:** the provisioner chain both builds run — QEMU guest agent install, Windows
