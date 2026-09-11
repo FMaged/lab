@@ -29,6 +29,13 @@ must stay fmt-clean and validate-clean against it.
   cannot be processed because the parameter name 'Include' is ambiguous" (it partially
   matches `-IncludeDefaultRules`/`-IncludeRule`/`-IncludeSuppressed`) — this is a
   parameter-binding error, not a lint finding, so it fails before analyzing anything.
+- The terraform matrix (`terraform`/`opnsense`) sets `fail-fast: false`. Without it,
+  a fmt/validate break in one directory cancels the other directory's job
+  mid-run — it never gets the chance to fail (or pass) on its own merits, so a real
+  problem in `opnsense/` could hide behind an unrelated one in `terraform/`.
+- Only `push` to `main` and `pull_request` trigger this workflow — pushing a branch
+  on its own does **not** run it. To see CI on a branch before merging, open a PR
+  against `main`; closing/deleting the branch without merging closes the PR too.
 
 ## Gotchas
 
@@ -50,3 +57,12 @@ must stay fmt-clean and validate-clean against it.
   `Write-Output "::error::<real exception message>"`) rather than guessing twice —
   the annotations at `/repos/{owner}/{repo}/check-runs/{id}/annotations` surface
   whatever that step writes, without needing admin auth.
+- **2026-09-11, task 8 (proving the harness fails):** a test secret-scan commit
+  using AWS's own `AKIAIOSFODNN7EXAMPLE` placeholder key did **not** trip gitleaks —
+  it's on gitleaks' default allowlist by design, since that exact string appears in
+  thousands of docs and would otherwise be permanent noise. To actually test the
+  rule, use a fake-but-different AWS-shaped key (same `AKIA` + 20-char pattern),
+  never the well-known example value.
+- Pushing a branch does not run this workflow (see the trigger convention above) —
+  the first attempt at task 8 pushed straight to a branch and got no run at all
+  until a PR was opened against `main`.

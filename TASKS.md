@@ -263,7 +263,7 @@ written with no way to tell whether any of them is even syntactically sound.
    Notes: lycheeverse/lychee-action@v2, excludes any http(s) URL by regex so only
    relative repo links are checked.
 
-8. [ ] Prove the harness actually fails
+8. [x] Prove the harness actually fails
    **What:** a throwaway branch that breaks each check in turn — bad HCL, an unformatted
    file, a PowerShell analyzer violation, a fake credential, a dead link — confirming each
    job goes red, then deleted without merging.
@@ -273,7 +273,25 @@ written with no way to tell whether any of them is even syntactically sound.
    **How:** one commit per broken check on a branch, screenshot or note each red run, then
    delete the branch. Record in the Notes which check caught what.
 
-   Notes:
+   Notes: branch test/no-ref/prove-ci-catches-failures, opened as a PR (push alone
+   doesn't trigger `on: push: branches: [main]` — needed the pull_request event) and
+   closed by deleting the branch, never merged. One combined commit broke all six
+   checks at once rather than one commit each — jobs run independently in parallel,
+   so each failure is still unambiguously attributable to its own defect. Final run
+   (github.com/FMaged/lab/actions/runs/34633917750): all 6 jobs red at the expected
+   step — terraform fmt, terraform validate (opnsense), packer validate,
+   PSScriptAnalyzer, gitleaks, Lychee link check.
+   Two real bugs surfaced by the exercise itself, both fixed on main:
+   - terraform's matrix had default `fail-fast: true`, so the opnsense job got
+     cancelled instead of genuinely failing once the sibling terraform job failed —
+     added `fail-fast: false` so one directory's break can never hide another's.
+   - the first secret-scan test used AWS's own AKIAIOSFODNN7EXAMPLE key, which
+     gitleaks allowlists by design (it's in thousands of docs) — gitleaks correctly
+     did not flag it. Swapped to a fake, non-allowlisted AWS-shaped key to actually
+     exercise the rule.
+   packer's fmt violation was tested and confirmed separately in the first attempt,
+   then removed so validate wasn't shadowed by an earlier failing step in the same
+   job — both are proven, just not in the same run.
 
 9. [ ] Add the CI badge and an execution status section to README.md
    **What:** the workflow status badge at the top, and a short section stating exactly
