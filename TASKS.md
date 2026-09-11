@@ -411,7 +411,7 @@ build one on.
    secret never touches this file. This wasn't spelled out in the task's How; adding
    it here since the plan didn't say how the real password reaches the image at all.
 
-5. [ ] Write the Windows 11 answer file
+5. [x] Write the Windows 11 answer file
    **What:** `packer/files/autounattend-client.xml` — the same shape as the server answer
    file, plus whatever the spike in task 1 determined is needed for a local account and
    the hardware checks.
@@ -422,7 +422,11 @@ build one on.
    without understanding them — the VM gets a real TPM and Secure Boot in task 7, which is
    the supported path.
 
-   Notes:
+   Notes: zero hardware-check bypass keys, as the SPIKE concluded. One real
+   structural difference from the server file beyond ISO/driver paths:
+   UserAccounts/LocalAccounts instead of AdministratorPassword, since client SKUs
+   ship the built-in Administrator disabled — this is the SPIKE's actual mechanism,
+   not BypassNRO. vioscsi driver path is w11\amd64, not 2k25\amd64.
 
 6. [ ] Write the Windows Server 2025 source and build block
    **What:** `packer/windows-server-2025.pkr.hcl` — a `proxmox-iso` source producing a

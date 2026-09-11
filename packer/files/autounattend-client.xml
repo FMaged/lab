@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Windows 11 Pro — unattended install answer file. Same shape as
+  autounattend-server.xml (see that file's header for the shared reasoning); this
+  comment only covers where the client genuinely differs.
+
+  No hardware-check bypass registry keys (BypassTPMCheck, BypassSecureBootCheck,
+  etc.) anywhere in this file — windows-11.pkr.hcl gives the VM a real TPM 2.0 and
+  Secure Boot, so Setup's checks simply pass. See the Windows 11 SPIKE decision in
+  PLAN.md for why that is the supported path and the bypass keys were rejected.
+
+  The local account uses UserAccounts/LocalAccounts, not UserAccounts/
+  AdministratorPassword like the server file. Client SKUs ship the built-in
+  Administrator account disabled; LocalAccounts is what creates a first local
+  account without a Microsoft account, combined with the OOBE HideOnlineAccount*
+  settings below — this is the same mechanism enterprise deployment tooling (MDT,
+  Autopilot) uses, and per the SPIKE, current and confirmed still working.
+
+  ADMINISTRATOR PASSWORD BELOW IS NOT A SECRET — see the server file's header. Must
+  match windows-11.pkr.hcl's `winrm_password` exactly.
+-->
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+
+  <settings pass="windowsPE">
+    <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="amd64"
+      publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+      xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <SetupUILanguage>
+        <UILanguage>de-DE</UILanguage>
+      </SetupUILanguage>
+      <InputLocale>de-DE</InputLocale>
+      <SystemLocale>de-DE</SystemLocale>
+      <UILanguage>de-DE</UILanguage>
+      <UILanguageFallback>de-DE</UILanguageFallback>
+      <UserLocale>de-DE</UserLocale>
+    </component>
+
+    <!-- vioscsi under w11\, not 2k25\ — the only difference from the server file's
+         driver path, since virtio-win ships OS-version-specific driver folders. -->
+    <component name="Microsoft-Windows-PnpCustomizationWinPE" processorArchitecture="amd64"
+      publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+      xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <DriverPaths>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="1">
+          <Path>E:\vioscsi\w11\amd64</Path>
+        </PathAndCredentials>
+      </DriverPaths>
+    </component>
+
+    <component name="Microsoft-Windows-Setup" processorArchitecture="amd64"
+      publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+      xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <UserData>
+        <AcceptEula>true</AcceptEula>
+        <FullName>SILAB</FullName>
+        <Organization>SILAB</Organization>
+      </UserData>
+      <ImageInstall>
+        <OSImage>
+          <!-- Exact image name, not an index — same rule as the server file, and the
+               same residual unknown: unverified against a real ISO yet. -->
+          <InstallFrom>
+            <MetaData wcm:action="add">
+              <Key>/IMAGE/NAME</Key>
+              <Value>Windows 11 Pro</Value>
+            </MetaData>
+          </InstallFrom>
+          <InstallToAvailablePartition>false</InstallToAvailablePartition>
+          <InstallTo>
+            <DiskID>0</DiskID>
+            <PartitionID>4</PartitionID>
+          </InstallTo>
+        </OSImage>
+      </ImageInstall>
+      <DiskConfiguration>
+        <Disk wcm:action="add">
+          <DiskID>0</DiskID>
+          <WillWipeDisk>true</WillWipeDisk>
+          <CreatePartitions>
+            <CreatePartition wcm:action="add">
+              <Order>1</Order>
+              <Type>EFI</Type>
+              <Size>260</Size>
+            </CreatePartition>
+            <CreatePartition wcm:action="add">
+              <Order>2</Order>
+              <Type>MSR</Type>
+              <Size>16</Size>
+            </CreatePartition>
+            <CreatePartition wcm:action="add">
+              <Order>3</Order>
+              <Type>Primary</Type>
+              <Size>1024</Size>
+            </CreatePartition>
+            <CreatePartition wcm:action="add">
+              <Order>4</Order>
+              <Type>Primary</Type>
+              <Extend>true</Extend>
+            </CreatePartition>
+          </CreatePartitions>
+          <ModifyPartitions>
+            <ModifyPartition wcm:action="add">
+              <Order>1</Order>
+              <PartitionID>1</PartitionID>
+              <Format>FAT32</Format>
+              <Label>System</Label>
+            </ModifyPartition>
+            <ModifyPartition wcm:action="add">
+              <Order>2</Order>
+              <PartitionID>2</PartitionID>
+            </ModifyPartition>
+            <ModifyPartition wcm:action="add">
+              <Order>3</Order>
+              <PartitionID>3</PartitionID>
+              <Format>NTFS</Format>
+              <Label>Recovery</Label>
+              <TypeID>de94bba4-06d1-4d40-a16a-bfd50179d6ac</TypeID>
+            </ModifyPartition>
+            <ModifyPartition wcm:action="add">
+              <Order>4</Order>
+              <PartitionID>4</PartitionID>
+              <Format>NTFS</Format>
+              <Label>Windows</Label>
+              <Letter>C</Letter>
+            </ModifyPartition>
+          </ModifyPartitions>
+        </Disk>
+      </DiskConfiguration>
+    </component>
+  </settings>
+
+  <settings pass="specialize">
+    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64"
+      publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+      xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <ComputerName>*</ComputerName>
+      <TimeZone>W. Europe Standard Time</TimeZone>
+    </component>
+    <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64"
+      publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+      xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <InputLocale>de-DE</InputLocale>
+      <SystemLocale>de-DE</SystemLocale>
+      <UILanguage>de-DE</UILanguage>
+      <UserLocale>de-DE</UserLocale>
+    </component>
+  </settings>
+
+  <settings pass="oobeSystem">
+    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64"
+      publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+      xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <OOBE>
+        <HideEULAPage>true</HideEULAPage>
+        <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
+        <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+        <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+        <NetworkLocation>Work</NetworkLocation>
+        <ProtectYourPC>3</ProtectYourPC>
+        <SkipMachineOOBE>true</SkipMachineOOBE>
+        <SkipUserOOBE>true</SkipUserOOBE>
+      </OOBE>
+      <!-- Local account, not AdministratorPassword — see the file header. -->
+      <UserAccounts>
+        <LocalAccounts>
+          <LocalAccount wcm:action="add">
+            <Name>Administrator</Name>
+            <DisplayName>Administrator</DisplayName>
+            <Group>Administrators</Group>
+            <Password>
+              <Value>Pa$$w0rd-PackerBuild!</Value>
+              <PlainText>true</PlainText>
+            </Password>
+          </LocalAccount>
+        </LocalAccounts>
+      </UserAccounts>
+      <AutoLogon>
+        <Enabled>true</Enabled>
+        <LogonCount>3</LogonCount>
+        <Username>Administrator</Username>
+        <Password>
+          <Value>Pa$$w0rd-PackerBuild!</Value>
+          <PlainText>true</PlainText>
+        </Password>
+      </AutoLogon>
+      <FirstLogonCommands>
+        <SynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <Description>Enable WinRM</Description>
+          <CommandLine>winrm quickconfig -quiet</CommandLine>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add">
+          <Order>2</Order>
+          <Description>Allow WinRM basic auth and unencrypted traffic for the build only</Description>
+          <CommandLine>powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true; Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true"</CommandLine>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add">
+          <Order>3</Order>
+          <Description>Open the WinRM HTTP port</Description>
+          <CommandLine>netsh advfirewall firewall add rule name="WinRM-HTTP" dir=in action=allow protocol=TCP localport=5985</CommandLine>
+        </SynchronousCommand>
+      </FirstLogonCommands>
+    </component>
+  </settings>
+</unattend>
