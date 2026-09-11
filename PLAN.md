@@ -30,7 +30,7 @@ status decision below.
 | --- | --- |
 | Hypervisor | Proxmox VE 9.2 — target platform, no host available yet |
 | Validation | GitHub Actions — fmt, validate, lint and secret scanning on every push |
-| Image build | Packer — Windows Server 2025 base image with VirtIO drivers and WinRM |
+| Image build | Packer — two base images, Windows Server 2025 and Windows 11, with VirtIO drivers and WinRM |
 | Provisioning | Terraform with the bpg/proxmox provider |
 | OS configuration | Windows PowerShell 5.1 |
 | Router / firewall | OPNsense |
@@ -197,3 +197,51 @@ Rejected: nesting Proxmox on the existing homelab host — not available at the 
 Worth revisiting if that changes, since it would make the proof run free.
 Rejected: ordinary cloud VMs — nested virtualization is either unavailable or
 unreliable on shared-tenancy instances, which is precisely what this workload needs.
+
+### Two Packer templates, Windows Server 2025 and Windows 11
+
+Why: CL01 is a Windows 11 workstation in every design document, and the client half
+of the demonstration — a workstation joining the domain and visibly receiving a GPO —
+is the part a reviewer asks about first. Windows 11 needs its own installation media,
+a TPM 2.0 device and Secure Boot, so it cannot be cloned from a Server template. The
+two builds share their VirtIO injection, WinRM setup and provisioners, so the second
+one is mostly a different ISO and a different firmware shape.
+Note: this supersedes the "single template" wording carried in the `packer-windows`
+skill, which was written before the client was thought through.
+Rejected: one Server 2025 template for all three guests — the simplest possible build,
+but it makes the client fictional and a reviewer would read it as avoiding the work.
+Rejected: Windows 10 LTSC for the client — no TPM or Secure Boot requirement and
+therefore an easier build, but it demonstrates an operating system past end of support.
+Rejected: deferring the Windows 11 template to a later milestone — the two builds share
+most of their structure, so splitting them means writing the same answer file and
+provisioner logic twice, weeks apart, with nothing runnable in between to compare.
+
+### Both images are built in German (de-DE) throughout
+
+Why: this portfolio targets the German job market, and every piece of visual evidence
+the project produces is a screenshot. A domain that looks like a German company network
+is more convincing in that screenshot than a locale-agnostic one, and locale is baked
+into the image at install time — changing it later means a rebuild, not a setting.
+Accepted cost: Windows errors come back in German, which makes them measurably harder
+to search for while debugging. Worth it, given the audience.
+Rejected: en-US throughout — every error message matches the online documentation
+exactly, which is the easier build, but the lab then reads as generic.
+Rejected: an en-US system with a German keyboard and timezone — a common real compromise
+in German companies, but it splits the difference and gives up the authenticity that was
+the whole reason for choosing German.
+
+### Windows Server uses Desktop Experience, not Server Core
+
+Why: `docs/ad-design.md` already names screenshots as the visible proof that the domain
+works, and Active Directory Users and Computers and the Group Policy Management Console
+are what produce them. Those consoles are also instantly recognisable to any reviewer
+who has run a Windows domain.
+Accepted cost: a substantially larger image and more patching than Core, and it is not
+what a modern production build would choose. Say so in the README rather than let it
+look unconsidered.
+Rejected: Server Core — smaller, faster to patch and closer to current practice, but
+every piece of visual evidence would then have to come from a remote console, making the
+proof depend on the client being up first.
+Rejected: Core for DC01 and Desktop Experience for SRV01 — demonstrates both, at the
+cost of two server variants to maintain in the layer that is hardest to debug with no
+hardware to test on.
