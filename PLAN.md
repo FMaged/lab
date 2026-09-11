@@ -274,3 +274,50 @@ Rejected: a Microsoft Entra / cloud-account first boot, converted to local after
 adds a network dependency and an extra provisioner step to undo work Setup just did,
 for a build that already has WinRM and a provisioner chain to create the account
 correctly the first time.
+
+### The OPNsense bootstrap is manual, and the boundary is stated in the runbook
+
+Why: the Terraform provider talks to OPNsense's REST API, so something has to install
+the appliance, assign its interfaces and enable that API before any code can run. That
+is a one-time appliance install, and automating it would mean reintroducing the
+config.xml mechanism already rejected for the main configuration, in a form nobody can
+test until a host exists. Real deployments install an appliance by hand too.
+How: `docs/runbook.md` splits section 3 into a manual half and a code half, and says
+exactly which settings belong to each. Anything that can be code, is code.
+Rejected: seeding a config.xml at first boot — fully hands-off, but it brings back a
+mechanism this project rejected on its merits, and it would be unverifiable until the
+proof run.
+Rejected: calling the whole firewall manual — it would leave the layer with the most
+interesting content, the rule set, outside the repo.
+
+### The OPNsense VM is defined in terraform/ with every other VM
+
+Why: the firewall is a Proxmox VM like the other three, and the rebuild-from-repo claim
+only holds if it is in code. Keeping one Proxmox root means one place that knows about
+VM IDs, datastores and VLAN tags. The `opnsense/` root stays what its skill says it is —
+configuration of a running firewall, with its own state and its own lifecycle.
+Consequence: `terraform/` is applied in two stages. The firewall VM comes up and is
+bootstrapped before the Windows VMs are worth starting, because until it routes there is
+no gateway, no DHCP and no DNS path. Milestone 4 therefore also scaffolds the
+`terraform/` root, and Milestone 5 adds the three Windows guests to it.
+Rejected: a third Terraform root for just the firewall VM — makes the ordering visible in
+the directory layout, at the cost of three states to manage for four VMs.
+Rejected: creating it by hand in the Proxmox UI — the install is manual anyway, but the
+VM definition is exactly the part that should not be, since it carries the VLAN tags and
+the hardware shape.
+
+### Inter-VLAN traffic is least privilege, with a reason on every rule
+
+Why: three VLANs that can all reach each other are an organisational label, not a
+security boundary, and a reviewer reads an unrestricted allow rule as segmentation
+theatre. Least privilege is also the posture the Systemintegration role being applied for
+actually has to implement.
+How: default deny between VLANs. Clients reach DC01 for exactly the services a domain
+member needs and nothing else. The Management VLAN is reachable from no other VLAN. Each
+rule carries a description saying what it is for, per the `terraform-opnsense` skill.
+Accepted cost: the largest rule set in the project, and the layer most likely to be
+subtly wrong in a way static validation cannot catch. `docs/network-design.md` carries
+the policy so the rules implement a written spec rather than accumulating.
+Rejected: VLAN isolation with broad allows between Clients and Servers — far fewer rules,
+but it gives up the part that demonstrates the skill.
+Rejected: filtering only at the WAN edge — a flat network with extra steps.
