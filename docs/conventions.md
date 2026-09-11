@@ -37,6 +37,35 @@ Every VM gets both of:
 Tags are how a reviewer (or a script) can tell at a glance what a VM is for without
 opening its config — Proxmox shows them directly in the VM list.
 
+## Packer templates and ISOs
+
+| Template name | Guest | Built from |
+| --- | --- | --- |
+| `tpl-winsrv2025-de-v1` | DC01, SRV01 | German Windows Server 2025, Desktop Experience |
+| `tpl-win11-de-v1` | CL01 | German Windows 11 Pro |
+
+`tpl-` marks it as a Packer artifact, never a running guest, in the Proxmox VM
+list. The trailing `-v<N>` is mandatory, not decoration — per the packer-windows
+skill, a changed image is a new template, never an edit of the old one, and the
+version number is what makes that rule visible without opening the build files.
+Bumping it is a Terraform change too, since `terraform/` clones by template name;
+the old template stays until nothing references it, then gets deleted.
+
+Template VMIDs live in a reserved `9000`–`9099` range, kept clear of every guest
+VMID so a future guest can never collide with a template by accident.
+
+ISOs live on the `local` datastore as `local:iso/<file>`:
+
+| File | Contents |
+| --- | --- |
+| `win-server-2025-de.iso` | German Windows Server 2025 installation media |
+| `win-11-pro-de.iso` | German Windows 11 Pro installation media |
+| `virtio-win-<version>.iso` | VirtIO drivers, version pinned to match `packer/variables.pkr.hcl` |
+
+No "latest" symlink or unversioned VirtIO filename — the exact version in the
+filename is what lets a rebuild months later use precisely what the original build
+used, per the same pinning discipline as every other tool in this repo.
+
 ## Formatting and pinning (CI-enforced)
 
 - `terraform fmt` and `packer fmt` clean at all times, in `terraform/`, `opnsense/`

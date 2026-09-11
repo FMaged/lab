@@ -352,7 +352,7 @@ build one on.
    efi_config/pre_enrolled_keys — added in 1.2.0. Decision in PLAN.md, including the
    one unverified detail (exact German image-index name) left for the proof run.
 
-2. [ ] Add template naming and ISO conventions to docs/conventions.md
+2. [x] Add template naming and ISO conventions to docs/conventions.md
    **What:** the name each template gets in Proxmox, where installation and VirtIO ISOs
    live on the host, and the rule for what happens when an image is rebuilt.
    **Why:** the `packer-windows` skill explicitly defers naming to `docs/conventions.md`,
@@ -362,7 +362,9 @@ build one on.
    path convention, and the "a changed image is a new template, never an edit" rule the
    skill already states — the conventions file is where it belongs.
 
-   Notes:
+   Notes: tpl-winsrv2025-de-v1 / tpl-win11-de-v1, explicit -vN suffix mandatory.
+   Template VMIDs reserved to 9000-9099, clear of any future guest VMID range. ISO
+   filenames are version-pinned too, no "latest" alias.
 
 3. [ ] Write the shared Packer variables and a committed example var file
    **What:** `packer/variables.pkr.hcl` declaring Proxmox connection and node, the
