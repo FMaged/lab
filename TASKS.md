@@ -428,7 +428,7 @@ build one on.
    ship the built-in Administrator disabled — this is the SPIKE's actual mechanism,
    not BypassNRO. vioscsi driver path is w11\amd64, not 2k25\amd64.
 
-6. [ ] Write the Windows Server 2025 source and build block
+6. [x] Write the Windows Server 2025 source and build block
    **What:** `packer/windows-server-2025.pkr.hcl` — a `proxmox-iso` source producing a
    Proxmox VM template, with the installation ISO and the VirtIO driver ISO both attached.
    **Why:** this is the artifact DC01 and SRV01 clone from, and per the skill the build is
@@ -438,7 +438,12 @@ build one on.
    ISO. WinRM communicator with a generous timeout, since a German ISO installing updates
    is slow. Tags and template name from `docs/conventions.md`.
 
-   Notes:
+   Notes: vm_id 9000, matching the 9000-9099 template range. This file is the
+   `source` block only, per its own What — the `build` block combining this with
+   the Windows 11 source and the shared provisioner chain lands in a new
+   packer/build.pkr.hcl in task 8, since no file was named for it. efi_config
+   present but pre_enrolled_keys = false — Secure Boot is task 7's addition, not
+   Server's requirement.
 
 7. [ ] Write the Windows 11 source and build block with TPM and Secure Boot
    **What:** `packer/windows-11.pkr.hcl` — the client source, adding a TPM 2.0 device and
