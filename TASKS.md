@@ -293,7 +293,7 @@ written with no way to tell whether any of them is even syntactically sound.
    then removed so validate wasn't shadowed by an earlier failing step in the same
    job — both are proven, just not in the same run.
 
-9. [ ] Add the CI badge and an execution status section to README.md
+9. [x] Add the CI badge and an execution status section to README.md
    **What:** the workflow status badge at the top, and a short section stating exactly
    what is validated and what has never been run on real hardware.
    **Why:** PLAN.md requires the execution status to be stated plainly. The badge and that
@@ -302,6 +302,11 @@ written with no way to tell whether any of them is even syntactically sound.
    **How:** badge from the Actions workflow, then a short section listing what CI checks
    and one sentence saying the lab has not yet been applied to a host. Keep the wording
    ready to update when the proof run lands.
+
+   Notes: replaced the old one-line Status section with "Execution status" — a bold
+   opening claim, the CI table from CLAUDE.md's Validation section, and an explicit
+   line that green CI proves the code is well-formed, not that anything booted.
+   Points at Milestone 8 as where that proof would come from.
 
    Notes:
 

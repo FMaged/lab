@@ -1,5 +1,7 @@
 # SI Portfolio Lab
 
+[![Validate](https://github.com/FMaged/lab/actions/workflows/validate.yml/badge.svg)](https://github.com/FMaged/lab/actions/workflows/validate.yml)
+
 A small company network built entirely as code — a Proxmox hypervisor, a Windows
 Server 2025 image, a routed multi-VLAN network and Active Directory — that can be
 torn down and rebuilt from this repository alone.
@@ -42,7 +44,23 @@ Full diagram with addressing: [docs/network-diagram.md](docs/network-diagram.md)
 | [powershell/](powershell/) | First-boot config: identity, AD promotion, domain join, GPOs |
 | [opnsense/](opnsense/) | Router and firewall config for the lab VLANs |
 
-## Status
+## Execution status
 
-No Proxmox hardware yet — the design in `docs/` and this entry point are the
-current deliverable. See [TASKS.md](TASKS.md) for what's done and what's next.
+**This lab has not been applied to real hardware.** No Proxmox host exists yet, and
+the development machine can't stand in for one — see the execution-status decision
+in [PLAN.md](PLAN.md). Every claim below is about what's checked, not what's run.
+
+What the green badge above actually means, on every push:
+
+| Layer | Checked by CI |
+| --- | --- |
+| `terraform/`, `opnsense/` | `terraform fmt -check` and `terraform validate` |
+| `packer/` | `packer fmt -check` and `packer validate` |
+| `powershell/` | PSScriptAnalyzer, failing on Error and Warning |
+| whole repo | gitleaks secret scan, markdown link check |
+
+This catches malformed code, bad references and leaked secrets — it does not prove
+a VM boots, a domain forms, or a firewall rule actually blocks anything. That proof
+is Milestone 8: an optional run on rented bare metal, captured as evidence. See
+[TASKS.md](TASKS.md) for what's done and what's next; this section's wording
+updates the moment a real proof run lands.
