@@ -245,3 +245,32 @@ proof depend on the client being up first.
 Rejected: Core for DC01 and Desktop Experience for SRV01 — demonstrates both, at the
 cost of two server variants to maintain in the layer that is hardest to debug with no
 hardware to test on.
+
+### Windows 11 gets its local account directly in the answer file, not via a BypassNRO trick
+
+Why: researched live (2026-09-11) because Microsoft has spent 2025 tightening the
+interactive OOBE — the manual `oobe\bypassnro` command and the `ms-cxh:localonly` URI
+were both blocked in Insider builds during 2025, and reports on retail 25H2 builds
+are inconsistent about whether either still works. None of that matters here: those
+are workarounds for a *human* clicking through Setup. An `autounattend.xml` never
+sees that screen at all — putting the account directly in
+`Microsoft-Windows-Shell-Setup/UserAccounts/LocalAccounts` plus
+`HideOnlineAccountScreens`/`HideWirelessSetupInOOBE`/`ProtectYourPC` in `oobeSystem`
+is the same mechanism OEM and enterprise deployment tooling (MDT, Autopilot) has
+always used, and every 2026 source confirms it still works — Microsoft cannot break
+it without breaking its own enterprise deployment story.
+Confirmed separately: the VM gets a real TPM 2.0 and Secure Boot (see the Desktop
+Experience decision's sibling, below), so no hardware-check bypass registry keys
+(`BypassTPMCheck`, `BypassSecureBootCheck`, etc.) are needed at all — those exist for
+the "install on hardware that doesn't qualify" case, not this one.
+Residual unknown: the exact image-index name for Windows 11 Pro on the German ISO is
+assumed to be the unlocalized string `"Windows 11 Pro"` (WIM image names aren't
+localized), but this is unverified against the real ISO, since there is no host to
+mount it on yet. Confirm before the Milestone 8 proof run, not before.
+Rejected: the registry-based `BypassNRO` route — it is documented as increasingly
+unreliable across 2025-2026 builds and it solves a problem (the interactive OOBE
+screen) that a fully unattended answer file never encounters in the first place.
+Rejected: a Microsoft Entra / cloud-account first boot, converted to local after —
+adds a network dependency and an extra provisioner step to undo work Setup just did,
+for a build that already has WinRM and a provisioner chain to create the account
+correctly the first time.

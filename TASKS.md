@@ -332,7 +332,7 @@ drivers and WinRM, neither generalized. The milestone ends when `packer validate
 green in CI on real build blocks — not when an image exists, because no host exists to
 build one on.
 
-1. [ ] SPIKE: what does a Windows 11 unattended install actually require now (max 2h)
+1. [x] SPIKE: what does a Windows 11 unattended install actually require now (max 2h)
    **Why:** task 5 cannot be written without this. Windows 11 setup enforces TPM 2.0 and
    Secure Boot, and the local-account path through OOBE has moved more than once across
    releases — the `BypassNRO` route in particular stopped working in a recent build.
@@ -343,6 +343,14 @@ build one on.
    satisfied by giving the VM a real TPM and Secure Boot rather than registry bypasses,
    and which image index the German ISO exposes for Windows 11 Pro.
    Output: one decision entry in PLAN.md
+   Notes: researched live — BypassNRO is a red herring for a fully unattended build,
+   since it works around an interactive OOBE screen the answer file never shows. The
+   real mechanism is UserAccounts/LocalAccounts + HideOnlineAccountScreens in
+   oobeSystem, same as MDT/Autopilot use, confirmed still working into 2026. No
+   hardware-check bypass keys needed since the VM gets a real TPM/Secure Boot.
+   Also confirmed packer-plugin-proxmox 1.2.3 (pinned) supports tpm_config and
+   efi_config/pre_enrolled_keys — added in 1.2.0. Decision in PLAN.md, including the
+   one unverified detail (exact German image-index name) left for the proof run.
 
 2. [ ] Add template naming and ISO conventions to docs/conventions.md
    **What:** the name each template gets in Proxmox, where installation and VirtIO ISOs
