@@ -35,9 +35,13 @@
     <!--
       vioscsi is the only driver Setup needs at this point — the source block uses
       the virtio-scsi-single controller, so without this the disk is invisible and
-      Setup dies at partitioning with no VirtIO storage driver. VirtIO ISO is
-      attached as the second CD-ROM, mounted as E: during WinPE. NetKVM and the rest
+      Setup dies at partitioning with no VirtIO storage driver. NetKVM and the rest
       install later via virtio-win-guest-tools, in the shared provisioner chain.
+
+      Packer does not guarantee which CD-ROM drive letter the VirtIO ISO lands on
+      relative to the generated answer-file disc, so every plausible letter is
+      listed — Setup silently skips any path that does not exist, so the extras
+      cost nothing.
     -->
     <component name="Microsoft-Windows-PnpCustomizationWinPE" processorArchitecture="amd64"
       publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
@@ -45,7 +49,13 @@
       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
       <DriverPaths>
         <PathAndCredentials wcm:action="add" wcm:keyValue="1">
+          <Path>D:\vioscsi\2k25\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="2">
           <Path>E:\vioscsi\2k25\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="3">
+          <Path>F:\vioscsi\2k25\amd64</Path>
         </PathAndCredentials>
       </DriverPaths>
     </component>

@@ -37,14 +37,21 @@
     </component>
 
     <!-- vioscsi under w11\, not 2k25\ — the only difference from the server file's
-         driver path, since virtio-win ships OS-version-specific driver folders. -->
+         driver path, since virtio-win ships OS-version-specific driver folders.
+         Same multi-drive-letter hedge as the server file — see its comment. -->
     <component name="Microsoft-Windows-PnpCustomizationWinPE" processorArchitecture="amd64"
       publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
       xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
       <DriverPaths>
         <PathAndCredentials wcm:action="add" wcm:keyValue="1">
+          <Path>D:\vioscsi\w11\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="2">
           <Path>E:\vioscsi\w11\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="3">
+          <Path>F:\vioscsi\w11\amd64</Path>
         </PathAndCredentials>
       </DriverPaths>
     </component>
