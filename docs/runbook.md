@@ -6,8 +6,49 @@ doing it, not written speculatively ahead of the work.
 
 ## 1. Proxmox host install
 
-*(Milestone 8 — not started. Will cover: ISO install, network/VLAN bridge setup
-matching `docs/hardware.md`, and confirming the host is reachable at 10.10.10.2.)*
+**Never executed.** Every step below is what `proxmox/answer.toml` and
+`proxmox/first-boot-hook.sh` are written to do — there is no host to run them
+against yet. See the execution status decision in PLAN.md, and the zero-touch
+decision for why this section describes an unattended install rather than a
+person clicking through one.
+
+1. `cp example.env .env`, then `scripts/init-env.sh` to generate every locally
+   generatable credential, including `PROXMOX_ROOT_PASSWORD`/`_HASH`. Load it:
+   `set -a; . ./.env; set +a`.
+2. Download the Proxmox VE installer ISO. `scripts/prepare-proxmox-iso.sh
+   <source.iso> <output.iso>` renders `proxmox/answer.toml` from `.env` and
+   calls `proxmox-auto-install-assistant prepare-iso` to embed the rendered
+   answer file and `proxmox/first-boot-hook.sh` into `<output.iso>`. Both the
+   rendered answer file and any prepared ISO are gitignored — never commit
+   either.
+3. Get `<output.iso>` onto the rented server and boot it. The exact delivery
+   mechanism (virtual media, a provider's own custom-ISO upload) is Milestone 8
+   task 1's job to confirm once a specific product is chosen.
+4. The install runs unattended per `proxmox/answer.toml` — German keyboard and
+   timezone, static address `10.10.10.2/24` on the Management VLAN, gateway
+   `10.10.10.1` (`docs/network-design.md`) — and reboots on its own when done.
+5. On first real boot, `proxmox/first-boot-hook.sh` runs exactly once
+   (Proxmox's own `proxmox-first-boot` package guarantees this), mints one API
+   token each for Terraform and Packer, per the secrets decision in PLAN.md,
+   and writes both — already shaped as `.env` lines — to
+   `/root/proxmox-api-tokens.txt`.
+6. Set the host firewall rule restricting the web UI to your own address
+   **before** relying on anything past this point (Milestone 8 task 4) — this
+   section only gets the host installed and reachable over SSH, not secured
+   against the open internet.
+7. SSH in as `root` with `PROXMOX_ROOT_PASSWORD` from `.env`, copy the two
+   lines out of `/root/proxmox-api-tokens.txt` into `.env`, delete the file on
+   the host, and reload `.env`.
+
+**If it stops:** a hang before the first reboot usually means
+`proxmox/answer.toml`'s `disk-list = ["sda"]` doesn't match the real server's
+boot disk — a residual unknown flagged in that file; confirm the actual device
+name with the provider first. A reboot with nothing in
+`/root/proxmox-api-tokens.txt` means the first-boot hook failed; check
+`journalctl -u proxmox-first-boot` for why. Unlike OPNsense's build (section
+2), the SPIKE behind this section found nothing in the Proxmox install that
+needed a manual fallback — a genuine stall here is a bug to fix in
+`proxmox/answer.toml` or the hook script, not a step to do by hand.
 
 ## 2. Packer image build
 
@@ -16,37 +57,44 @@ locally and in CI) but has never run against a real Proxmox host — there is no
 host yet. See the execution status decision in PLAN.md; this note comes out the
 moment a real build runs.
 
-1. Upload the two installation ISOs and the VirtIO driver ISO to the Proxmox
-   `local` datastore (or whatever `iso_datastore` is set to), named exactly as
-   `docs/conventions.md` specifies — `win-server-2025-de.iso`,
-   `win-11-pro-de.iso`, `virtio-win-<version>.iso`.
-2. Set up credentials once for the whole project: `cp example.env .env`, fill in
-   the real values, then `set -a; . ./.env; set +a`. That covers the Proxmox URL
-   and token and `local_admin_password` for this section. Separately, copy
-   `packer/example.pkrvars.hcl` to `packer/packer.auto.pkrvars.hcl` (gitignored)
-   and set the node, datastores and the three ISO checksums — those are not
-   secrets and do not belong in `.env`. Never commit either filled-in file.
+1. Upload the two Windows installation ISOs, the VirtIO driver ISO, and the
+   OPNsense installer ISO (decompressed from its `.iso.bz2` download) to the
+   Proxmox `local` datastore (or whatever `iso_datastore` is set to), named
+   exactly as `docs/conventions.md` specifies — `win-server-2025-de.iso`,
+   `win-11-pro-de.iso`, `virtio-win-<version>.iso`, `OPNsense-26.7-dvd-amd64.iso`.
+2. `.env` should already be filled in from section 1 — that covers the Proxmox
+   URL, both its tokens, and every guest and OPNsense credential this section
+   needs. Separately, copy `packer/example.pkrvars.hcl` to
+   `packer/packer.auto.pkrvars.hcl` (gitignored) and set the node, datastores
+   and the four ISO checksums — those are not secrets and do not belong in
+   `.env`. Never commit either filled-in file.
 3. From `packer/`: `packer init .` (downloads the pinned Proxmox and
-   Windows-Update plugins), then `packer build .`. Both sources build from one
-   `packer build .` invocation, since they share the `windows-templates` build
-   block — there is no way to build just one without commenting out the other's
-   `source` entry in `build.pkr.hcl`.
-4. Watch for the build reaching the WinRM communicator — this is the point the
-   packer-windows skill calls "finished" for the unattended-install half. If it
-   hangs before then, the most likely causes, in order: the VirtIO driver isn't
-   at the drive letter the answer file expects (see the multi-letter hedge in
-   both `autounattend-*.xml`), the image-index name doesn't match the real ISO
-   (`docs/conventions.md`'s residual unknown, flagged since the Windows 11 SPIKE),
-   or the bootstrap password in the answer file and the source block's
-   `winrm_password` have drifted out of sync.
-5. On success, confirm both templates exist in the Proxmox UI: `tpl-winsrv2025-de-v1`
-   and `tpl-win11-de-v1`, VM IDs 9000 and 9001, tagged `lab` plus their role tag.
-   Also confirm the QEMU guest agent is installed inside each template, not just
-   that the build succeeded. Every guest sets `agent { enabled = true }`, so a
-   template without the agent does not fail the next apply — it makes Terraform
-   wait for a ping that never arrives until the step times out.
-   `install-guest-tools.ps1` now fails the build on a non-zero installer exit
-   code, so this check should be a formality; confirm it anyway, once.
+   Windows-Update plugins), then `packer build .`. All three templates build
+   from one invocation — two build blocks (`windows-templates` and
+   `opnsense-template`) across the sources in the directory, not one shared
+   block, but `packer build .` with no `-only` flag still runs every source in
+   both.
+4. Watch each build reach its communicator — WinRM for the two Windows
+   sources (the point the packer-windows skill calls "finished"), SSH for
+   OPNsense. If a Windows build hangs first, the most likely causes, in order:
+   the VirtIO driver isn't at the drive letter the answer file expects (see
+   the multi-letter hedge in both `autounattend-*.xml`), the image-index name
+   doesn't match the real ISO (`docs/conventions.md`'s residual unknown,
+   flagged since the Windows 11 SPIKE), or the bootstrap password in the
+   answer file and the source block's `winrm_password` have drifted out of
+   sync. If the OPNsense build hangs, see `packer/opnsense.pkr.hcl`'s own
+   comments first — its `boot_command` is the single least-verified artifact
+   in the whole project (PLAN.md's zero-touch SPIKE), and the config-carrier
+   device name (guessed as `cd1`) is the most likely wrong guess.
+5. On success, confirm all three templates exist in the Proxmox UI:
+   `tpl-winsrv2025-de-v1` (9000), `tpl-win11-de-v1` (9001) and
+   `tpl-opnsense-v1` (9002), each tagged `lab` plus its role tag. Confirm the
+   QEMU guest agent is installed inside each *Windows* template specifically —
+   OPNsense has none, deliberately (`agent { enabled = false }` on that guest).
+   A Windows template without the agent does not fail the next apply — it
+   makes Terraform wait for a ping that never arrives until the step times
+   out. `install-guest-tools.ps1` now fails the build on a non-zero installer
+   exit code, so this check should be a formality; confirm it anyway, once.
 6. Re-running `packer build .` after a change always produces a *new* numbered
    template (`-v2`, `-v3`, …) per `docs/conventions.md` — it never overwrites
    `-v1` in place. `terraform/` clones by template *name*, so bumping the version
@@ -58,86 +106,49 @@ moment a real build runs.
 validated where a validator exists; none of it has run against a real firewall.
 See the execution status decision in PLAN.md.
 
-### 3a. Manual bootstrap
+### 3a. The template's baked-in configuration
 
-The manual/code boundary is interface assignment and addressing, not VLANs — see
-the decision in PLAN.md. Concretely, that means this half happens in two passes:
-some of it before `terraform apply` creates the VLAN devices, the rest after.
+There is no manual bootstrap any more — the zero-touch decision in PLAN.md
+superseded it. Interface assignment, VLAN devices and addressing are all
+already in `tpl-opnsense-v1` by the time section 2's `packer build .` finishes,
+set by `packer/files/config.xml` via the live-image config importer, not typed
+by a person after the VM exists. If a setting here turns out wrong, the fix is
+that file (and a new template version), never a click in the web UI.
 
-Every credential in this project lives in one gitignored `.env` at the repository
-root. Copy the committed template once, fill it in, and load it before any tool:
+Nothing to do in this section by hand. If it needs checking:
+
+- The interface assignment (WAN on `vtnet0`, the three VLANs on `vtnet1` as
+  `opt1`/`opt2`/`opt3`) and every address are `packer/files/config.xml`'s job —
+  compare them against `docs/network-design.md` there, not on a live system.
+- The one credential this section still involves is the root password, and
+  even that is not typed anywhere at runbook time — `scripts/init-env.sh`
+  generated it into `.env` back in section 1, and
+  `packer/opnsense.pkr.hcl`'s last provisioner rotates it into the template
+  during the build.
+- The API key and secret `opnsense/`'s Terraform provider authenticates with
+  are generated the same way, baked into the template the same build, and
+  already sit in `.env` as `OPNSENSE_API_KEY`/`OPNSENSE_API_SECRET` — nothing
+  here waits on a step that hasn't happened yet, unlike the old bootstrapping
+  order this section used to describe.
+
+### 3b. Clone the firewall, then apply DHCP, firewall and NAT
+
+From `terraform/`, create **only the firewall** first:
 
 ```
-cp example.env .env
-# edit .env
-set -a; . ./.env; set +a
+terraform apply -target=proxmox_virtual_environment_vm.opnsense
 ```
 
-`example.env` documents each variable and what it is for. Four matter before this
-section's step 1: `PROXMOX_VE_ENDPOINT` and `PROXMOX_VE_API_TOKEN`, both from
-section 1's host install, and the Packer equivalents section 2 already used.
+The `-target` is not optional. This root defines all four guests, and a plain
+`apply` here would build the three Windows machines too — before the network
+they need exists, so each would boot with no address and Terraform's WinRM
+handoff would hang waiting on an address nothing is serving yet.
 
-The three `OPNSENSE_*` values cannot be filled in yet — they do not exist until
-step 5 below creates them. Leave them as placeholders, complete steps 1 to 5, then
-fill them in and reload `.env` before 3b. That ordering is the bootstrapping
-problem this section exists to solve.
-
-**Before `terraform apply` for `terraform/vm-opnsense.tf`:**
-
-1. Attach the OPNsense installation ISO to the `local` datastore first, as
-   `local:iso/opnsense.iso` — the VM won't boot without it. Then, from
-   `terraform/`, create **only the firewall**:
-
-   ```
-   terraform apply -target=proxmox_virtual_environment_vm.opnsense
-   ```
-
-   The `-target` is not optional. This root defines all four guests, and a plain
-   `apply` here would build the three Windows machines too — before the network
-   they need exists, so each would boot with no address and Terraform's WinRM
-   handoff would hang waiting on an address nothing is serving yet.
-
-**After the VM exists, before any Terraform touches `opnsense/`:**
-
-2. Boot the VM and run the OPNsense installer from console (ZFS is fine for a
-   lab; set a root password you'll actually remember, since it's what the web
-   UI login uses too).
-3. At the console menu, **Assign interfaces** (option 1): assign the WAN-bridge
-   NIC as `wan` and note the trunk-bridge NIC's device name (e.g. `vtnet1`) —
-   it stays unassigned for now. It is the VLAN devices Terraform creates from it
-   in 3b that get assigned, not the raw NIC itself.
-4. Confirm WAN picked up a DHCP lease from the home router (console menu or
-   Interfaces > WAN in the web UI) — no action needed if it did.
-5. In the web UI: **System > Settings > Administration**, enable the API.
-   **System > Access > Users**, create (or use an existing account) an API
-   key/secret pair. This is the literal bootstrapping problem the decision in
-   PLAN.md describes — nothing in `opnsense/` can run before this exists.
-
-**After 3b has run once and `opnsense/`'s VLAN devices exist:**
-
-6. **Interfaces > Assignments**: assign each of the three new VLAN devices
-   (`vtnet1.10`, `vtnet1.20`, `vtnet1.30`, or whatever the tag suffix renders
-   as) to its own logical interface, and give each the static address from
-   `docs/network-design.md`'s address table — `10.10.10.1/24`, `10.10.20.1/24`,
-   `10.10.30.1/24`. Naming the assigned interfaces `MGMT`/`SERVERS`/`CLIENTS`
-   (rather than the default `OPT1`/`OPT2`/`OPT3`) makes every later step, and
-   every firewall rule, far easier to read.
-
-### 3b. Code — VLANs, DHCP, firewall
-
-Two roots, and they apply in a fixed order — `opnsense/` cannot run before 3a's
-manual steps give it an API to talk to, and its own VLAN devices don't exist
-for step 6 of 3a to assign until this runs once.
-
-1. The targeted `terraform apply` in `terraform/` is already done — see 3a step 1.
-   The other three guests in that root stay uncreated until section 4; they have
-   nothing to boot into until this section finishes.
-2. Complete 3a steps 2–5 (install, WAN assignment, enable the API).
-3. `terraform init && terraform apply` in `opnsense/` — creates the three VLAN
-   devices, the Clients DHCP scope, the aliases, every filter rule and the
-   outbound NAT rule.
-4. Complete 3a step 6 (assign each VLAN device to an interface, address it).
-5. Verify: from a host on each VLAN, confirm it can reach its gateway and (for
+1. `terraform init && terraform apply` in `opnsense/` — creates the Clients
+   DHCP scope, the Servers reservations, the aliases, every filter rule and
+   the outbound NAT rule. No VLAN devices to create here any more (3a) — this
+   root only ever reaches settings the API actually exposes.
+2. Verify: from a host on each VLAN, confirm it can reach its gateway and (for
    Clients) that it received a DHCP lease with DC01 as its DNS server. There is
    no DC01 yet at this point, so the DNS server it hands out is an address that
    does not answer — that is expected here and fixed by section 4.
@@ -156,9 +167,9 @@ branch and watching that leg go red before reverting.
 ## 4. DC01 — domain controller
 
 **Never executed.** Depends on section 3 being fully done first — no gateway, no
-DHCP reservation and no DNS path exist until the firewall is bootstrapped and
-its VLAN devices are assigned and addressed. Also depends on three guest
-passwords, all already in the `.env` loaded back in section 3a:
+DHCP reservation and no DNS path exist until the firewall is cloned and its
+`opnsense/` apply has run. Also depends on three guest passwords, all already
+in the `.env` loaded back in section 1:
 
 | Variable | Value |
 | --- | --- |

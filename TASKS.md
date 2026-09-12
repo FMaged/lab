@@ -2213,7 +2213,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
     Notes:
 
-11. [ ] Rewrite runbook sections 1 and 3a for what now happens without a person
+11. [x] Rewrite runbook sections 1 and 3a for what now happens without a person
     **What:** section 1 describing the unattended host install, and section 3a describing a
     firewall that boots already configured, both keeping the never-executed marker.
     **Why:** `AGENTS.md` makes a layer unfinished until its runbook section is written, and
@@ -2224,6 +2224,27 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     **Accept:** neither section tells a person to type into an installer or web interface
     unless a spike recorded why; both carry the never-executed marker; the markdown link
     check passes.
+
+    Notes: the real scope ended up wider than "sections 1 and 3a" read literally —
+    3a's entire *content* (a person installing and configuring OPNsense by hand)
+    is what got automated, not just its wording, so 3b's steps that interleaved
+    with "3a step 6" had to be rewritten too, and section 4's opening still
+    pointed at "the `.env` loaded back in section 3a," which no longer loads
+    anything there. Kept the `3a`/`3b` heading split and anchors rather than
+    collapsing section 3 into one flow — `opnsense/provider.tf` and
+    `opnsense/README.md` both still say "runbook 3a" in a few words, and
+    repointing two live cross-references was simpler than retitling the anchor
+    everything else in the repo already resolves against. Fixed both of those
+    files' stale "installed and API-enabled by hand" wording in the same commit,
+    since they were only a few words each and now flatly wrong. Also fixed
+    section 2, one section this task wasn't named for but which the same
+    rewrite made stale on contact: it still said "both sources" and "one shared
+    build block" when there are three sources across two blocks now, and never
+    mentioned uploading the OPNsense ISO at all.
+
+    Confirmed real: `check-markdown-links.py` and `check-design-consistency.py`
+    both still pass; read the whole file start to finish afterward, the same way
+    Milestone 7 task 10 did, rather than trusting the diff alone.
 
     Notes:
 
