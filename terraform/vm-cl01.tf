@@ -12,10 +12,11 @@ data "proxmox_virtual_environment_vms" "win11_template" {
 }
 
 resource "proxmox_virtual_environment_vm" "cl01" {
-  name      = "CL01"
-  node_name = var.proxmox_node
-  vm_id     = 301 # docs/conventions.md — Clients VLAN (30), sequence 1.
-  tags      = ["lab", "role-client"]
+  name                        = "CL01"
+  node_name                   = var.proxmox_node
+  vm_id                       = 301 # docs/conventions.md — Clients VLAN (30), sequence 1.
+  tags                        = ["lab", "role-client"]
+  this_is_not_a_real_argument = true # deliberate break for task 10's CI-catches-it test
 
   clone {
     vm_id = data.proxmox_virtual_environment_vms.win11_template.vms[0].vm_id
