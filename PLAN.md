@@ -618,11 +618,21 @@ Correction, found while writing task 5 (2026-09-12): no rotate-after-build provi
 needed for the root password after all. OPNsense's own documentation confirms the
 importer route makes `bsdinstall`'s own password prompt take its value from the imported
 configuration — the installed system's root password already is whatever
-`config.xml`'s `<passwd>` hash says, not a bootstrap value to change later. That is
-simpler than the Windows pattern this decision first reached for, not a variant of it:
-`config.xml` carries the real root password's SHA-512-crypt hash directly, generated
-offline by `scripts/init-env.sh` next to the API secret's hash, and `boot_command` only
-needs to get past the prompt, not fill it with anything load-bearing.
+`config.xml`'s `<passwd>` hash says, not a bootstrap value to change later.
+Second correction, found while writing task 7 (2026-09-12) — the first correction above
+was itself incomplete. OPNsense's install docs, read in full rather than summarized,
+state plainly: once the importer runs, the live environment's own login prompt (the
+`installer` user, which is what actually launches `bsdinstall`) requires *that same*
+imported root password to log in *before* the installer ever starts — there is no
+password-free path to it. That makes the Windows pattern the right one after all, for a
+different reason than first assumed: `config.xml`'s `<passwd>` hash is a fixed,
+non-secret bootstrap value (computed once, the same way the Windows answer files use a
+fixed bootstrap string), typed by `boot_command` to clear that login gate; a `shell`
+provisioner over SSH then rotates root's password to the real secret after install, the
+same rotate-after-build pattern `rotate-admin-password.ps1` already uses. The API user's
+`<secret>` hash is unaffected by any of this — it is never typed anywhere, only ever
+read by the API, so it carries the real secret's hash from the start, generated offline
+in `scripts/init-env.sh` exactly as originally planned.
 Rejected: reproducing the configuration by sending keystrokes into OPNsense's post-install
 console setup wizard (the LAN/WAN/OPT interface-name prompts) instead of the importer —
 that wizard only assigns interfaces to physical/`vtnet` devices, has no path to create

@@ -8,9 +8,19 @@
   <filter> are deliberately empty so nothing here can drift from
   docs/network-design.md's rule table.
 
-  ${...} placeholders are Packer's own `templatefile()` syntax, rendered from
+  $${...} placeholders are Packer's own `templatefile()` syntax, rendered from
   PKR_VAR_* in packer/opnsense.pkr.hcl straight into `cd_content` — no separate
   render step and no rendered copy ever written back into this file.
+
+  The root password below is a fixed, non-secret bootstrap value
+  ("Pa$$w0rd-PackerBuild!", the same one the two Windows answer files use),
+  never the real secret in .env — OPNsense's own install docs confirm the live
+  environment's login prompt requires *this* password before the installer
+  even starts, so `boot_command` has to type something real here. A shell
+  provisioner over SSH rotates it to the real PKR_VAR_opnsense_root_password
+  after install, the same rotate-after-build pattern
+  packer/files/rotate-admin-password.ps1 uses for the Windows images. See the
+  correction on PLAN.md's OPNsense SPIKE decision.
 -->
 <opnsense>
   <theme>opnsense</theme>
@@ -31,7 +41,7 @@
       <descr>System Administrator</descr>
       <scope>system</scope>
       <groupname>admins</groupname>
-      <password>${opnsense_root_password_hash}</password>
+      <password>${opnsense_bootstrap_password_hash}</password>
       <uid>0</uid>
     </user>
     <user>

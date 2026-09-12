@@ -48,13 +48,13 @@ set_var "TF_VAR_local_admin_password" "${local_admin_password}"
 set_var "TF_VAR_domain_admin_password" "$(gen_secret)"
 set_var "TF_VAR_dsrm_recovery_password" "$(gen_secret)"
 
-# OPNsense root password: config.xml's own <passwd> hash is what actually
-# takes effect (PLAN.md), so both the plaintext (for the operator) and its
-# sha512crypt hash (for the template) are generated together.
-opnsense_root_password="$(gen_secret)"
-set_var "PKR_VAR_opnsense_root_password" "${opnsense_root_password}"
-set_var "PKR_VAR_opnsense_root_password_hash" \
-  "$(openssl passwd -6 -salt "$(gen_salt)" "${opnsense_root_password}")"
+# OPNsense root password: never typed anywhere, so no hash is needed here —
+# config.xml's own root password is a fixed, non-secret bootstrap value (the
+# live installer's login prompt requires *some* password before it will even
+# start, per PLAN.md's correction). packer/opnsense.pkr.hcl rotates root to
+# this real value over SSH as its last provisioner, the same rotate-after-
+# build pattern rotate-admin-password.ps1 uses for the Windows images.
+set_var "PKR_VAR_opnsense_root_password" "$(gen_secret)"
 
 # OPNsense API key/secret for opnsense/'s Terraform provider. The key is
 # stored in config.xml as plaintext; only the secret is hashed there.

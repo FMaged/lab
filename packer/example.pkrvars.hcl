@@ -14,3 +14,6 @@ win11_iso_checksum = "sha256:REPLACE_ME"
 
 virtio_iso_file     = "virtio-win-0.1.285.iso"
 virtio_iso_checksum = "sha256:REPLACE_ME"
+
+opnsense_iso_file     = "OPNsense-26.7-dvd-amd64.iso"
+opnsense_iso_checksum = "sha256:REPLACE_ME"

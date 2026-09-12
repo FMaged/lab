@@ -68,7 +68,7 @@ ISOs live on the `local` datastore as `local:iso/<file>`:
 | `win-server-2025-de.iso` | German Windows Server 2025 installation media |
 | `win-11-pro-de.iso` | German Windows 11 Pro installation media |
 | `virtio-win-<version>.iso` | VirtIO drivers, version pinned to match `packer/variables.pkr.hcl` |
-| `OPNsense-<version>-dvd-amd64.iso` | Official OPNsense installer media, version pinned to match `packer/plugins.pkr.hcl`'s build |
+| `OPNsense-26.7-dvd-amd64.iso` | Official OPNsense installer media (decompressed from the `.iso.bz2` download — Proxmox needs the raw ISO) |
 
 No "latest" symlink or unversioned VirtIO filename — the exact version in the
 filename is what lets a rebuild months later use precisely what the original build

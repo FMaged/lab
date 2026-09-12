@@ -2017,7 +2017,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    parses as well-formed XML, and `check-design-consistency.py`/
    `check-markdown-links.py` both still pass.
 
-7. [ ] Write packer/opnsense.pkr.hcl
+7. [x] Write packer/opnsense.pkr.hcl
    **What:** a `proxmox-iso` build that drives the OPNsense installer with `boot_command`
    and produces `tpl-opnsense-v1` with task 6's config applied.
    **Why:** the firewall becomes a template like the two Windows images, so Terraform
@@ -2030,7 +2030,54 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    `boot_command` step traces to an installer prompt task 1 recorded; nothing under
    `packer/` holds a rendered config with real values.
 
-   Notes:
+   Notes: "the existing build" read literally is impossible — the Windows build's
+   provisioners (WinRM/PowerShell) have no meaning against an SSH/FreeBSD guest — so
+   this is a second, separate `build` block in the new file instead, still covered
+   by `packer validate .` with zero workflow changes since that command already
+   walks every `.pkr.hcl` in the directory. No separate render-and-gitignore step
+   needed the way task 9's `answer.toml` needs one: `templatefile()` renders
+   `config.xml` straight into `cd_content` at validate/build time, so nothing
+   rendered ever touches disk in this repo at all.
+
+   A real design correction surfaced while writing this, not while researching
+   task 1: OPNsense's install docs, read in full this time, say the live
+   environment's login prompt itself demands the *imported* root password before
+   `bsdinstall` even starts — there is no password-free path to it, which the
+   SPIKE's "no rotation needed" conclusion had missed. Reverted to the Windows
+   pattern for the right reason this time: `config.xml`'s root password is a fixed
+   bootstrap hash (of the same non-secret `Pa$$w0rd-PackerBuild!` string, defined
+   once as an HCL local and shared between the template and the new
+   `rotate-opnsense-root-password.sh`, not duplicated as a literal in both), and a
+   `shell` provisioner rotates it to the real secret after install. Second
+   correction recorded in PLAN.md rather than a third rewrite of the same
+   paragraph. `PKR_VAR_opnsense_root_password_hash` — added to `example.env` and
+   `scripts/init-env.sh` in tasks 4/5 on the first (incomplete) understanding —
+   turned out to be unnecessary and was removed from both in this commit; only the
+   API secret's hash is still generated, since that one really is never typed
+   anywhere.
+
+   The rotation script also has to persist the change into `config.xml` itself, not
+   just the live OS user table — OPNsense re-applies `config.xml`'s stored hash to
+   the OS on every boot, so a `pw`-only change would silently revert on Terraform's
+   first clone-and-boot. Used BSD `sed -i ''` deliberately, not the GNU form — a
+   real, easy-to-get-wrong difference on a FreeBSD-based guest.
+
+   Confirmed real, not assumed: `packer fmt`, `packer init` and `packer validate .`
+   all genuinely run locally and all pass, including a first failure that was
+   fixed rather than routed around — `templatefile()` tried to interpret this
+   file's own prose explanation of `${...}` syntax as real interpolation, fixed
+   by escaping it to `$${...}`, then confirmed by manually rendering the template
+   with fake substitute values and parsing the result as XML. `shellcheck` is
+   clean on the new `.sh` file. `check-design-consistency.py` and
+   `check-markdown-links.py` both still pass, and `terraform validate` in both
+   roots is unaffected.
+
+   The `boot_command` sequence itself is the single least-verified artifact in
+   this milestone, flagged as such in the file — the documented sequence of
+   screens is real (task 1's SPIKE, confirmed again in full while writing this),
+   but the exact keystroke count per `bsdinstall` dialog and the config carrier's
+   device name (guessed as `cd1`) cannot be confirmed without a live install.
+   Left exactly that honest rather than invented false precision.
 
 8. [ ] Clone the firewall from its template and hand the VLANs to it
    **What:** `terraform/vm-opnsense.tf` cloning `tpl-opnsense-v1` instead of booting an
