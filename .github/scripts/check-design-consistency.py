@@ -25,9 +25,11 @@ OWNERS = {
     "ip": ROOT / "docs" / "network-design.md",
 }
 
-# Where the values get used.
-CODE_DIRS = ("terraform", "opnsense")
-CODE_SUFFIXES = (".tf", ".pkr.hcl")
+# Where the values get used. packer/ and proxmox/ joined in Milestone 9, once
+# packer/files/config.xml and proxmox/answer.toml started carrying real
+# addresses baked in at build time instead of a person typing them by hand.
+CODE_DIRS = ("terraform", "opnsense", "packer", "proxmox")
+CODE_SUFFIXES = (".tf", ".pkr.hcl", ".xml", ".toml")
 
 MAC_RE = re.compile(r"\b([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})\b")
 # Lab address space only. The WAN side is a real home or provider network and is

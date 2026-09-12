@@ -2175,7 +2175,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    `check-design-consistency.py` and `check-markdown-links.py` both still
    pass.
 
-10. [ ] Extend CI to cover everything this milestone added
+10. [x] Extend CI to cover everything this milestone added
     **What:** `shellcheck` on `scripts/`, the design consistency check widened to the new
     config and answer file templates, and proof that each still fails on a break.
     **Why:** this milestone adds shell and two new files carrying lab addresses, and the
@@ -2187,6 +2187,29 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     **Accept:** a shell error in `scripts/` turns CI red; a wrong address in the OPNsense
     template or `answer.toml` fails the consistency check naming the file and line; every
     check is green on the real branch.
+
+    Notes: `shellcheck` needs no action or install step — it ships preinstalled on
+    `ubuntu-latest`, matching the project's existing preference for a runner tool
+    over a marketplace action when one already does the job. Widened the job past
+    the task's own literal scope to include `proxmox/first-boot-hook.sh` alongside
+    `scripts/*.sh` — it's real shell code with nothing else checking it, and the
+    task's Why already worries about "this milestone adds shell" in general, not
+    only the one directory. Widened the consistency script's `CODE_DIRS` to add
+    `packer` and `proxmox` wholesale rather than special-casing `packer/files/` —
+    the existing suffix filter already limits what actually gets read in each
+    directory, so this was simpler than a per-directory suffix map for the same
+    result; `packer/`'s `.pkr.hcl` suffix was already declared but never reachable
+    before this, since `packer` was never in `CODE_DIRS` at all.
+
+    Confirmed real, not assumed, for both: introduced a genuine `SC2086` violation
+    (an unquoted variable) into a scratch copy of `init-env.sh` and confirmed
+    `shellcheck` catches it, then reverted; changed one gateway address in
+    `packer/files/config.xml` to `10.10.99.1` and confirmed
+    `check-design-consistency.py` names the exact file and line, then reverted.
+    **Not verified: real CI.** Same limitation as every earlier milestone's task 8
+    — no `gh` CLI or token in this environment, so nothing was pushed from here.
+    Every command above is the literal command the workflow runs, executed
+    directly rather than approximated; confirm on the next real push.
 
     Notes:
 
