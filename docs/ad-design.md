@@ -64,8 +64,9 @@ as proof a GPO actually applied, not just linked.
 
 ## Constraints this places on later milestones
 
-- Milestone 5's PowerShell must create the OU tree and the two groups before
+- Milestone 6's PowerShell must create the OU tree and the two groups before
   anything is moved into them, and must place SRV01's computer object in
   `Computers/Servers` — Terraform only creates the VM, it does not know about OUs.
-- Milestone 6 must show CL01's computer object landing in `Computers/Workstations`
-  and the logon banner appearing after a `gpupdate` / reboot.
+- The same milestone must show CL01's computer object landing in
+  `Computers/Workstations` and the logon banner appearing after a `gpupdate` /
+  reboot.

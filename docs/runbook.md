@@ -6,7 +6,7 @@ doing it, not written speculatively ahead of the work.
 
 ## 1. Proxmox host install
 
-*(Milestone 2 — not started. Will cover: ISO install, network/VLAN bridge setup
+*(Milestone 8 — not started. Will cover: ISO install, network/VLAN bridge setup
 matching `docs/hardware.md`, and confirming the host is reachable at 10.10.10.2.)*
 
 ## 2. Packer image build
@@ -113,8 +113,8 @@ for step 6 of 3a to assign until this runs once.
 4. Complete 3a step 6 (assign each VLAN device to an interface, address it).
 5. Verify: from a host on each VLAN, confirm it can reach its gateway and (for
    Clients) that it received a DHCP lease with DC01 as its DNS server. Full
-   client-to-DC01 and domain verification waits for Milestone 5 — there's no
-   DC01 yet to actually test against.
+   client-to-DC01 and domain verification waits for Milestone 6 — Milestone 5
+   only brings DC01 up as a VM, with no domain yet to test against.
 
 Re-running `terraform apply` in `opnsense/` after a change is safe and expected
 — unlike the Packer templates, this root's resources are meant to be updated in
@@ -169,5 +169,5 @@ doesn't exist yet has nothing to join.
 
 ## 6. Full rebuild, start to finish
 
-*(Milestone 7 — not started. Will cover: tearing everything down and replaying
+*(Milestone 8 — not started. Will cover: tearing everything down and replaying
 sections 1–5 in order from a clean host, as the final proof the repo is complete.)*
