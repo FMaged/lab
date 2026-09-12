@@ -1627,6 +1627,14 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
 ## Milestone 8: The lab is applied once on rented bare metal and the evidence is captured
 
+**Do not start this milestone until Milestones 9 and 10 have landed.** They are numbered
+after it but run before it: the decision was to make the whole deployment zero-touch
+before paying for a proof run, so this milestone should end up running one command rather
+than the runbook by hand. The numbers stay as they are because seven files outside this
+one already refer to the proof run as Milestone 8. Task 1's spike is largely answered by
+Milestone 9's second spike, and tasks 4 to 7 describe the manual path; revise them when
+Milestone 10 lands, not before.
+
 Optional by design — everything above stands without it. This is the milestone that turns
 "this should work" into "this ran", for roughly the price of a meal.
 
@@ -1808,3 +1816,219 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     placeholder left behind.
 
     Notes:
+
+## Milestone 9: Every step that needed a human is code
+
+Zero-touch, part one. Every manual step in the runbook becomes something a machine does:
+the Proxmox host installs itself from an answer file, the firewall is a Packer template
+that boots already routing with its API enabled, and every credential is generated rather
+than typed. Nothing is orchestrated end to end yet — that is Milestone 10. And nothing is
+run: there is still no host, so this milestone ends at validated, like every milestone
+before the proof run.
+
+This milestone reverses standing decisions, so task 3 records the replacements in
+`PLAN.md` before any code is written against them. Per `AGENTS.md`, a rejected option
+stays rejected until its entry is replaced.
+
+Numbered after Milestone 8 but runs before it — see the note at the top of Milestone 8.
+
+Branch this milestone per `docs/conventions.md`: one branch, one commit per task, one PR.
+
+1. [ ] SPIKE: can Packer drive the OPNsense installer and bake a config that boots routing (max 3h)
+   **Why:** OPNsense has no API for assigning a device to an interface or addressing it —
+   its interfaces API has eleven controllers and none does that — and neither its
+   installer nor its config importer runs unattended. Typing through the installer is the
+   only route to a hands-off firewall, and every later firewall task depends on whether it
+   works. Guessing here builds a template on keystrokes nobody has seen land.
+   **How:** check four things against the pinned `hashicorp/proxmox` plugin 1.2.3 and the
+   current OPNsense installer. Does `proxmox-iso` support `boot_command` with enough wait
+   control to survive the installer's prompts? Does config reach the disk better through
+   the importer, typed via `boot_command`, or by copying `config.xml` over SSH after
+   install? Do the NIC device names `vtnet0` and `vtnet1` stay stable when Terraform clones
+   the template, since the baked assignment depends on them? Can an API key and secret be
+   generated outside OPNsense and written into `config.xml`, so the key exists the moment
+   a clone boots?
+   Output: one decision entry in PLAN.md, stating which of the four held and which did not
+
+2. [ ] SPIKE: can the rented host install Proxmox unattended, and how does its token reach the operator (max 3h)
+   **Why:** Proxmox's automated installer is real — `proxmox-auto-install-assistant`
+   prepares an ISO carrying `answer.toml`, it runs headless, and it supports first-boot
+   hooks. What is unproven is whether an hourly bare metal product will boot that ISO at
+   all, and how a token minted by a first-boot hook gets back to whatever runs Terraform.
+   This largely answers Milestone 8's first spike.
+   **How:** for each candidate provider, check custom ISO boot or IPMI virtual media, and
+   whether `answer.toml` can be embedded in the ISO, which needs no DHCP or DNS the
+   provider controls. Decide where orchestration runs — an operator workstation, or the
+   hypervisor's own first-boot hook — and how the token travels: fetched over SSH, or
+   posted to the installer's post-install webhook.
+   Output: one decision entry in PLAN.md naming the provider, the answer file delivery, and where orchestration runs
+
+3. [ ] Replace the decisions this milestone reverses
+   **What:** `PLAN.md` entries recording the move to zero-touch, with every superseded
+   entry marked.
+   **Why:** standing decisions say the opposite of what this milestone builds. "The
+   OPNsense bootstrap is manual" rejected seeding a config file. "The manual/code boundary
+   is interface assignment and addressing" made that boundary a person's job. And nothing
+   records that zero-touch now comes before the proof run. Code written against these
+   first would contradict the plan it claims to implement.
+   **How:** add `Replaced by:` to the manual bootstrap decision. Amend the boundary
+   decision rather than retract it: its finding still holds and is now stronger, since no
+   API version can assign interfaces — only its consequence changes, from manual to baked
+   into a template. Say why the old config.xml rejection no longer applies: it rejected a
+   file seeded at first boot, unversioned and brittle, whereas a template's config lives in
+   the repository and is rebuilt deliberately. Record both spikes' outcomes, the generated
+   secrets, and the milestone order.
+   **Accept:** every decision this milestone contradicts carries `Replaced by:` or an
+   amendment naming what changed; each new entry has a Why and at least one Rejected; the
+   decision index regenerates with every anchor resolving.
+
+   Notes:
+
+4. [ ] Add the new names and layout to docs/conventions.md
+   **What:** the OPNsense template's name and VMID, the new `proxmox/` directory for the
+   host install, and a top-level `scripts/` directory for operator tools.
+   **Why:** Terraform clones templates by name, so `tpl-opnsense-v1` is an interface
+   between Packer and Terraform exactly like the two Windows templates, and it needs one
+   written source. The host install and the operator scripts are new layers with no home;
+   naming them first avoids a later move.
+   **How:** extend the template table and give the firewall template the next VMID in the
+   reserved `9000`–`9099` range. Keep `scripts/` apart from `.github/scripts/`: those are
+   CI checks, these run against a real host.
+   **Accept:** `tpl-opnsense-v1` and its VMID appear in the template table, clear of every
+   existing template and guest VMID; `proxmox/` and `scripts/` are described with what
+   belongs in each; the markdown link check passes.
+
+   Notes:
+
+5. [ ] Write scripts/init-env.sh
+   **What:** a script that writes `.env` from `example.env` with every locally generatable
+   credential filled in, and refuses to touch a `.env` that already exists.
+   **Why:** zero-touch means nobody types a password. Generating credentials into `.env`
+   keeps the `.env` decision intact and keeps secrets out of Terraform state, which
+   `random_password` resources would not.
+   **How:** strong random values for the three guest passwords, written so
+   `PKR_VAR_local_admin_password` and `TF_VAR_local_admin_password` are identical — Packer
+   bakes that one into the templates and Terraform authenticates with it. Also the OPNsense
+   root password, API key and API secret, if task 1 confirmed those can be generated
+   outside OPNsense. Leave the Proxmox tokens as placeholders; task 9's hook mints them.
+   Exit non-zero rather than overwrite, and create the file readable by its owner only.
+   **Accept:** run twice, the second run exits non-zero and leaves the first `.env`
+   byte-identical; the two local-admin variables always hold the same value; the file is
+   created with owner-only permissions; `shellcheck` passes.
+
+   Notes:
+
+6. [ ] Template the OPNsense config.xml
+   **What:** a committed `config.xml` template under `packer/files/` holding the interface
+   assignments, addresses, VLAN devices and API user the firewall boots with, with every
+   secret as a placeholder filled from `.env` at build time.
+   **Why:** this file replaces the manual bootstrap, so everything runbook section 3a does
+   by hand has to be in it. The repository is public, so it must never carry a real
+   credential, or a hash of one, into git.
+   **How:** WAN on the WAN NIC; VLANs 10, 20 and 30 on the trunk NIC, assigned and
+   addressed from `docs/network-design.md`; the API enabled for the user task 5 generated a
+   key for. Placeholders for the root password hash and the API key. Only what the API
+   cannot do goes in here — firewall rules, DHCP and NAT keep their Terraform resources in
+   `opnsense/`.
+   **Accept:** every address, VLAN ID and interface in the template matches
+   `docs/network-design.md`; no password, hash or key value is present, only placeholders;
+   gitleaks finds nothing in it.
+
+   Notes:
+
+7. [ ] Write packer/opnsense.pkr.hcl
+   **What:** a `proxmox-iso` build that drives the OPNsense installer with `boot_command`
+   and produces `tpl-opnsense-v1` with task 6's config applied.
+   **Why:** the firewall becomes a template like the two Windows images, so Terraform
+   clones all four guests the same way and no VM in the lab boots an installer.
+   **How:** the keystroke sequence and the config route come from task 1's decision, not
+   from guesswork. Substitute task 6's placeholders from `PKR_VAR_*` at build time so a
+   rendered file never lands in the repository. Pin any new plugin exactly. Add the source
+   to the existing build so `packer validate .` covers it with no workflow change.
+   **Accept:** `packer fmt -check` and `packer validate .` pass with the new source; every
+   `boot_command` step traces to an installer prompt task 1 recorded; nothing under
+   `packer/` holds a rendered config with real values.
+
+   Notes:
+
+8. [ ] Clone the firewall from its template and hand the VLANs to it
+   **What:** `terraform/vm-opnsense.tf` cloning `tpl-opnsense-v1` instead of booting an
+   ISO, and the VLAN devices removed from `opnsense/interfaces.tf`.
+   **Why:** a template that boots with its VLANs already assigned means those devices exist
+   before Terraform ever connects. Leaving them in `opnsense/interfaces.tf` too would give
+   one resource two owners, with Terraform trying to create what the template already made.
+   **How:** mirror the Windows guests — a template lookup with a postcondition naming the
+   template, and no CD-ROM. Keep the trunk NIC's documented `vlan_id` exception. Update the
+   `terraform-opnsense` and `terraform-proxmox` skills wherever they describe the firewall
+   booting an ISO or Terraform owning VLAN devices.
+   **Accept:** `vm-opnsense.tf` has no `cdrom` block and clones by template name with a
+   postcondition; `opnsense/` declares no VLAN device the template creates; both roots pass
+   `terraform validate`; neither skill still describes the old arrangement.
+
+   Notes:
+
+9. [ ] Make the Proxmox host install itself
+   **What:** a templated `proxmox/answer.toml`, the step that prepares an installer ISO
+   from it, and a first-boot hook that creates the API tokens Terraform and Packer need.
+   **Why:** runbook section 1 is the one layer with no automation at all, and on
+   hourly-billed hardware it is the most tedious. The hook closes the last chicken-and-egg
+   problem: nothing can reach Proxmox until a token exists, and today a person creates it.
+   **How:** answer file values from `docs/network-design.md`, including the management
+   address `10.10.10.2`, with the root password a placeholder filled from `.env`. Prepare
+   the ISO with `proxmox-auto-install-assistant prepare-iso` and gitignore the result,
+   since it embeds the rendered answers. The hook creates separate tokens for Terraform and
+   Packer so either can be revoked alone, delivered by the route task 2 chose.
+   **Accept:** the answer file's addresses match `docs/network-design.md` and it holds no
+   real secret; a prepared ISO or rendered answer file cannot be committed, confirmed with
+   `git check-ignore`; the hook creates two distinct tokens.
+
+   9.1. [ ] `proxmox/answer.toml` template and the ISO preparation step
+   9.2. [ ] First-boot hook creating both tokens
+   9.3. [ ] Gitignore the prepared ISO and any rendered answer file
+
+   Notes:
+
+10. [ ] Extend CI to cover everything this milestone added
+    **What:** `shellcheck` on `scripts/`, the design consistency check widened to the new
+    config and answer file templates, and proof that each still fails on a break.
+    **Why:** this milestone adds shell and two new files carrying lab addresses, and the
+    consistency check currently scans only `.tf` and `.pkr.hcl` under `terraform/` and
+    `opnsense/`. A wrong address in the firewall template would pass today.
+    **How:** a `shellcheck` job. Add `packer/files/` and `proxmox/` to the consistency
+    script's scanned paths, with `.xml` and `.toml`. Break each on a scratch commit the way
+    Milestone 2 task 8 did.
+    **Accept:** a shell error in `scripts/` turns CI red; a wrong address in the OPNsense
+    template or `answer.toml` fails the consistency check naming the file and line; every
+    check is green on the real branch.
+
+    Notes:
+
+11. [ ] Rewrite runbook sections 1 and 3a for what now happens without a person
+    **What:** section 1 describing the unattended host install, and section 3a describing a
+    firewall that boots already configured, both keeping the never-executed marker.
+    **Why:** `AGENTS.md` makes a layer unfinished until its runbook section is written, and
+    both sections currently tell a person to type what this milestone automated. Left
+    alone they would describe a procedure that no longer exists.
+    **How:** describe what the automation does and what to check if it stops, not what to
+    type. Keep a manual fallback only for a step a spike proved cannot be automated.
+    **Accept:** neither section tells a person to type into an installer or web interface
+    unless a spike recorded why; both carry the never-executed marker; the markdown link
+    check passes.
+
+    Notes:
+
+## Milestone 10: One command goes from bare metal to a verified domain
+
+<!-- Not planned yet, deliberately: its tasks depend on what Milestone 9's two spikes find,
+     above all where orchestration runs and how the Proxmox token travels. Fill it in when
+     Milestone 9 lands. Runs before Milestone 8.
+
+     What it has to deliver, so the destination is fixed even though the tasks are not:
+     - scripts/deploy.sh as the single command: prepare and boot the host ISO, wait for
+       the host, collect the token, generate .env, build all three templates, apply the
+       firewall, then DC01, then SRV01 and CL01, and wait for every Bootstrap phase.
+     - Test-SILab.ps1 run automatically at the end, its result as the command's exit code.
+     - Safe to re-run after a failure, without starting again from a clean host.
+     - scripts/destroy.sh, because an hourly bill needs teardown to be one command too.
+     - The runbook and the README's execution status rewritten around the single command.
+     - CI coverage for the orchestrator. -->
