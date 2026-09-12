@@ -14,7 +14,7 @@ configuration, each done for real rather than described.
 
 ```mermaid
 flowchart TB
-    internet(("Internet")) --- home["Home router\n192.168.1.0/24"]
+    internet(("Internet")) --- home["Home router<br/>192.168.1.0/24"]
     home -- WAN --- opn["OPNsense"]
     opn -- VLAN 10 Mgmt --- proxmox["Proxmox host"]
     opn -- VLAN 20 Servers --- dc01["DC01"]
