@@ -797,7 +797,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    the two-phase bootstrap-then-static path instead of just saying "static", so
    a reader isn't left wondering how a no-DHCP host gets its first address.
 
-2. [ ] Add a MAC address scheme to docs/conventions.md
+2. [x] Add a MAC address scheme to docs/conventions.md
    **What:** a fixed MAC for each of the four guests, in a locally administered range, with
    the rule that derives it from the VMID.
    **Why:** a DHCP reservation keys on MAC, so the address only stays stable across a
@@ -808,6 +808,12 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    disagree. Use a locally administered prefix, never a vendor OUI.
    **Accept:** conventions lists one MAC per guest, each derivable from that guest's VMID
    by the stated rule, and no two are equal.
+
+   Notes: `02:00:00:00:` + VMID as 4 hex digits — 101→...00:65, 201→...00:C9,
+   202→...00:CA, 301→...01:2D. `02` is locally-administered unicast (bit 1 set,
+   bit 0 clear), never a real OUI. OPNsense gets one too even though it has no
+   DHCP reservation of its own — the task named all four guests, and a blanket
+   "every guest has a documented MAC" rule is simpler than an exception.
 
    Notes:
 
