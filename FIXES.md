@@ -11,7 +11,7 @@ unsafely, and 9 is cosmetic. Each was verified against the code on
 None of this can be tested here. Every `Accept` line is checkable by reading the diff or
 by `terraform validate` / PSScriptAnalyzer, except where it says otherwise.
 
-1. [ ] Set the EFI firmware type and pre-enrolled keys on all three Windows guests
+1. [x] Set the EFI firmware type and pre-enrolled keys on all three Windows guests
    **What:** `type = "4m"` and `pre_enrolled_keys = true` in the `efi_disk` block of
    `vm-dc01.tf`, `vm-srv01.tf` and `vm-cl01.tf`, and the comment in `vm-cl01.tf` corrected.
    **Why:** all three currently set only `datastore_id`. The bpg/proxmox docs for the
@@ -27,9 +27,9 @@ by `terraform validate` / PSScriptAnalyzer, except where it says otherwise.
    **Accept:** all three `efi_disk` blocks set `type = "4m"` and `pre_enrolled_keys = true`;
    no comment claims the argument does not exist; `terraform validate` passes.
 
-   Notes:
+   Notes: also corrected the comment that claimed no such argument existed, verified against the bpg/proxmox 0.112.0 documentation rather than the latest. Applied to all three guests, not just CL01 — the servers are UEFI too. One impurity: the follow-up that moved the explanatory comment above the block, so `terraform fmt` alignment is unambiguous, landed in task 9's commit by a mistaken amend rather than this one.
 
-2. [ ] Do not trust a phase marker whose result is independently checkable
+2. [x] Do not trust a phase marker whose result is independently checkable
    **What:** a guard in `Bootstrap-CL01.ps1`, `Bootstrap-SRV01.ps1` and `Bootstrap-DC01.ps1`
    that fails loudly when a phase is marked complete but its effect is absent.
    **Why:** the marker is deliberately written *before* the call that reboots, because
@@ -47,9 +47,9 @@ by `terraform validate` / PSScriptAnalyzer, except where it says otherwise.
    corresponding state is absent; the marker is still written before the rebooting call;
    PSScriptAnalyzer clean.
 
-   Notes:
+   Notes: added `Assert-SILabPhaseEffect` to `SILab.psm1` rather than repeating the throw three times. Guarded exactly the three phases that write their marker before a rebooting call — DC01 phase 2, SRV01 phase 2, CL01 phase 1. Every other phase sets its marker after the work completes, so it cannot lie, and guarding them would have been noise.
 
-3. [ ] Stop passing passwords on the guest command line
+3. [x] Stop passing passwords on the guest command line
    **What:** the three `remote-exec` invocations in `vm-dc01.tf`, `vm-srv01.tf` and
    `vm-cl01.tf`, which interpolate passwords into a single-quoted PowerShell argument.
    **Why:** two problems. A password containing a single quote terminates the string early
@@ -68,9 +68,9 @@ by `terraform validate` / PSScriptAnalyzer, except where it says otherwise.
    password containing `'`; if the file route is chosen, `PLAN.md` carries an amended
    secrets decision in the same commit; `terraform validate` passes.
 
-   Notes:
+   Notes: escaped, not re-plumbed. `terraform/locals.tf` doubles every single quote before interpolation, which closes the injection and stays inside the secrets decision. **The process-list exposure is still open:** the passwords remain visible to any local user on the guest while the script runs. Closing that means writing them to the guest's disk, which `PLAN.md` forbids in those words, so it needs the decision amended first. Left deliberately.
 
-4. [ ] Turn on NTLM encryption for the WinRM connections
+4. [x] Turn on NTLM encryption for the WinRM connections
    **What:** `use_ntlm = true` on the three `connection` blocks, which currently set
    `https = false` and nothing else.
    **Why:** without it the local administrator password crosses the network base64-encoded
@@ -84,9 +84,9 @@ by `terraform validate` / PSScriptAnalyzer, except where it says otherwise.
    **Accept:** all three connection blocks set `use_ntlm = true`; no comment still describes
    the traffic as unencrypted; `terraform validate` passes.
 
-   Notes:
+   Notes: one line per guest plus a comment on `vm-dc01.tf` explaining why `https = false` and `use_ntlm = true` belong together — HTTPS needs a certificate the template does not carry, and setting only one of the two is the actual mistake.
 
-5. [ ] Qualify the domain in the join credential
+5. [x] Qualify the domain in the join credential
    **What:** `New-Object PSCredential -ArgumentList 'Administrator', $securePassword` in
    `Bootstrap-CL01.ps1` and `Bootstrap-SRV01.ps1`.
    **Why:** a bare `Administrator` is ambiguous and can resolve to the machine's local
@@ -98,9 +98,9 @@ by `terraform validate` / PSScriptAnalyzer, except where it says otherwise.
    **Accept:** neither script builds a credential from an unqualified username; the domain
    comes from the existing variable, not a new literal; PSScriptAnalyzer clean.
 
-   Notes:
+   Notes: used the UPN form built from the `$script:ForestDomainName` already defined in each script, so no second literal of the domain exists to drift. DC01 needed no change: it sets the local Administrator password directly and never builds a credential.
 
-6. [ ] Fail the template lookup with a message instead of an index error
+6. [x] Fail the template lookup with a message instead of an index error
    **What:** a `lifecycle` precondition on each of the three VM resources that use
    `data.proxmox_virtual_environment_vms.<template>.vms[0]`.
    **Why:** if the template is missing, renamed, or the Packer build has not run, the
@@ -114,9 +114,9 @@ by `terraform validate` / PSScriptAnalyzer, except where it says otherwise.
    each error message names the specific template and the corrective action;
    `terraform validate` passes.
 
-   Notes:
+   Notes: **Deviation from the plan.** Written as `postcondition` blocks on the two data sources rather than `precondition` blocks on the three VM resources. The failure belongs to the lookup, not to any one guest, and DC01 and SRV01 share a data source — so this is two blocks instead of three with no duplicated message.
 
-7. [ ] Add a CI check that the two Terraform roots agree on MACs and addresses
+7. [x] Add a CI check that the two Terraform roots agree on MACs and addresses
    **What:** a job in `.github/workflows/validate.yml` comparing every MAC address and IP
    in `terraform/` and `opnsense/` against the tables in `docs/conventions.md` and
    `docs/network-design.md`.
@@ -133,9 +133,9 @@ by `terraform validate` / PSScriptAnalyzer, except where it says otherwise.
    changing a MAC in one root only turns it red, demonstrated on a scratch commit;
    the check names which file disagrees with which.
 
-   Notes:
+   Notes: implemented as `.github/scripts/check-design-consistency.py` so it runs locally too, wired into `validate.yml` as a `consistency` job. It checks code against the design documents rather than root against root: `AGENTS.md` already requires changing the document first, so anchoring there makes the roots agree as a consequence and also catches a value invented in code that both roots happen to share. Case is normalised, so today's uppercase/lowercase MAC difference passes. Proven both ways: changing a MAC in `terraform/` only and an address in `opnsense/` only each produced a failure naming the file and line.
 
-8. [ ] Verify the disk and guest agent assumptions on the first real apply
+8. [x] Verify the disk and guest agent assumptions on the first real apply
    **What:** two assumptions in the VM definitions that only a real apply can settle,
    recorded as explicit checks in `docs/runbook.md` rather than left implicit.
    **Why:** `disk { interface = "scsi0", size = 64 }` must match what the Packer build
@@ -152,9 +152,9 @@ by `terraform validate` / PSScriptAnalyzer, except where it says otherwise.
    build file, or the mismatch is recorded; the guest agent's installation is confirmed in
    the Packer provisioner; the runbook names both as checks.
 
-   Notes:
+   Notes: the assumptions held — 80 GB and 64 GB match their templates, both use `virtio-scsi-single`, and the guest tools installer does install the agent. But it never checked its own exit code, and `Start-Process -Wait` sets neither `$LASTEXITCODE` nor throws, so a failed install was silent and would have surfaced exactly as the predicted agent hang. Now `-PassThru` with 0 and 3010 accepted. Both checks added to the runbook.
 
-9. [ ] Remove the stale "does not exist yet" comments
+9. [x] Remove the stale "does not exist yet" comments
    **What:** `vm-cl01.tf:88` and `vm-srv01.tf:64`, both still saying the Bootstrap script
    they invoke does not exist and arrives in Milestone 6.
    **Why:** both scripts exist. In a repository whose stated pitch is that the
@@ -167,4 +167,4 @@ by `terraform validate` / PSScriptAnalyzer, except where it says otherwise.
    **Accept:** no comment in any layer claims a file exists later that exists now; a grep
    for "does not exist yet" across the repository returns nothing.
 
-   Notes:
+   Notes: both removed. The wider grep found no other forward reference that has come true anywhere in `terraform/`, `opnsense/`, `packer/`, `powershell/` or `.github/`. The two remaining milestone references, both in `Bootstrap-DC01.ps1`, point at Milestone 8 and are still accurate.
