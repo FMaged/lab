@@ -854,7 +854,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    a second place for it to drift. 2 cores, matching the ~8-core/4-guest host
    budget in docs/hardware.md (that doc splits RAM per guest but not cores).
 
-5. [ ] Write terraform/vm-srv01.tf
+5. [x] Write terraform/vm-srv01.tf
    **What:** SRV01, same template as DC01, VMID 202, VLAN 20, pinned MAC, tags `lab` and
    `role-member-server`.
    **Why:** the member server is what proves a domain join works on something other than
@@ -865,7 +865,12 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** `terraform validate` passes; VMID 202, VLAN 20, correct MAC and tags; the
    diff against `vm-dc01.tf` touches only name, VMID, MAC, address and role tag.
 
-   Notes:
+   Notes: the diff touches one more value than the Accept line named — RAM
+   (4096 vs DC01's 8192), since docs/hardware.md's per-guest split genuinely
+   gives them different memory. Not a deviation to flag as wrong, just an
+   honest count: name, vm_id, mac_address, tag and memory all differ; node,
+   clone source, cpu, agent, disk and vlan_id don't. Reuses vm-dc01.tf's data
+   source rather than redeclaring it. Real fmt/validate both green.
 
 6. [ ] Write terraform/vm-cl01.tf
    **What:** CL01 cloned from `tpl-win11-de-v1`, VMID 301, VLAN 30, pinned MAC, tags `lab`
