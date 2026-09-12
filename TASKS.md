@@ -1922,7 +1922,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    and the Proxmox root password/two tokens, all extending the existing `.env` file rather
    than opening a new secrets category.
 
-4. [ ] Add the new names and layout to docs/conventions.md
+4. [x] Add the new names and layout to docs/conventions.md
    **What:** the OPNsense template's name and VMID, the new `proxmox/` directory for the
    host install, and a top-level `scripts/` directory for operator tools.
    **Why:** Terraform clones templates by name, so `tpl-opnsense-v1` is an interface
@@ -1936,7 +1936,14 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    existing template and guest VMID; `proxmox/` and `scripts/` are described with what
    belongs in each; the markdown link check passes.
 
-   Notes:
+   Notes: `tpl-opnsense-v1` at VMID 9002, the next free slot after the two Windows
+   templates and clear of every guest VMID. Also added an ISO row for the official
+   OPNsense installer media, matching the existing VirtIO/Windows ISO rows, since
+   task 7 needs one and none existed. Went one step further than the task's own How and
+   added `proxmox/`/`scripts/` rows to `AGENTS.md`'s own layout table too — cheap, and
+   leaving a new top-level directory undocumented there is exactly the kind of gap
+   Milestone 7's audit called out. Confirmed real: `check-markdown-links.py` and
+   `check-design-consistency.py` both still pass.
 
 5. [ ] Write scripts/init-env.sh
    **What:** a script that writes `.env` from `example.env` with every locally generatable

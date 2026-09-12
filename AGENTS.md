@@ -26,6 +26,8 @@ by running something; that option does not exist.
 | `terraform/` | VM provisioning against Proxmox (bpg/proxmox) |
 | `powershell/` | First-boot OS config, AD promotion, domain join, GPOs |
 | `opnsense/` | Router and firewall config (browningluke/opnsense) |
+| `proxmox/` | The host's own unattended-install answer file (Milestone 9) |
+| `scripts/` | Operator tools that run against a real host or `.env` (Milestone 9/10) |
 | `docs/` | Network and AD design, hardware, conventions, runbook |
 | `.github/workflows/` | The validation harness |
 

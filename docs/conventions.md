@@ -43,6 +43,7 @@ opening its config — Proxmox shows them directly in the VM list.
 | --- | --- | --- |
 | `tpl-winsrv2025-de-v1` | DC01, SRV01 | German Windows Server 2025, Desktop Experience |
 | `tpl-win11-de-v1` | CL01 | German Windows 11 Pro |
+| `tpl-opnsense-v1` | OPNsense | Official OPNsense installer ISO, config baked in via the live-image importer (see the zero-touch decision in `PLAN.md`) |
 
 `tpl-` marks it as a Packer artifact, never a running guest, in the Proxmox VM
 list. The trailing `-v<N>` is mandatory, not decoration — per the packer-windows
@@ -54,6 +55,12 @@ the old template stays until nothing references it, then gets deleted.
 Template VMIDs live in a reserved `9000`–`9099` range, kept clear of every guest
 VMID so a future guest can never collide with a template by accident.
 
+| Template | VMID |
+| --- | --- |
+| `tpl-winsrv2025-de-v1` | 9000 |
+| `tpl-win11-de-v1` | 9001 |
+| `tpl-opnsense-v1` | 9002 |
+
 ISOs live on the `local` datastore as `local:iso/<file>`:
 
 | File | Contents |
@@ -61,10 +68,18 @@ ISOs live on the `local` datastore as `local:iso/<file>`:
 | `win-server-2025-de.iso` | German Windows Server 2025 installation media |
 | `win-11-pro-de.iso` | German Windows 11 Pro installation media |
 | `virtio-win-<version>.iso` | VirtIO drivers, version pinned to match `packer/variables.pkr.hcl` |
+| `OPNsense-<version>-dvd-amd64.iso` | Official OPNsense installer media, version pinned to match `packer/plugins.pkr.hcl`'s build |
 
 No "latest" symlink or unversioned VirtIO filename — the exact version in the
 filename is what lets a rebuild months later use precisely what the original build
 used, per the same pinning discipline as every other tool in this repo.
+
+## New top-level directories (zero-touch deployment)
+
+| Directory | Holds |
+| --- | --- |
+| `proxmox/` | The `answer.toml` template and the ISO-preparation step that make the rented host install itself — see the zero-touch decision in `PLAN.md`. Runs once, before any Terraform or Packer command. |
+| `scripts/` | Operator tools that run against a real host or a real `.env` — `init-env.sh`, and Milestone 10's `deploy.sh`/`destroy.sh`. Kept apart from `.github/scripts/`, which holds CI-only checks that never touch a live host. |
 
 ## Guest VMIDs
 
