@@ -613,11 +613,16 @@ declares the same two `network_device` blocks in the same order the template was
 with; that is a real constraint task 8 has to hold, not a risk to design around.
 How: `packer/opnsense.pkr.hcl` drives the installer with `boot_command`;
 `packer/files/config.xml` (task 6) carries the interface/VLAN/API configuration with
-placeholders substituted from `PKR_VAR_*` at build time; a provisioner resets the
-OPNsense root password to the real secret after install, the same rotate-after-build
-pattern `rotate-admin-password.ps1` already uses for the Windows images, since the
-config-importer route still needs a build-time bootstrap password to get through the
-installer's own prompt.
+placeholders substituted from `PKR_VAR_*` at build time.
+Correction, found while writing task 5 (2026-09-12): no rotate-after-build provisioner is
+needed for the root password after all. OPNsense's own documentation confirms the
+importer route makes `bsdinstall`'s own password prompt take its value from the imported
+configuration — the installed system's root password already is whatever
+`config.xml`'s `<passwd>` hash says, not a bootstrap value to change later. That is
+simpler than the Windows pattern this decision first reached for, not a variant of it:
+`config.xml` carries the real root password's SHA-512-crypt hash directly, generated
+offline by `scripts/init-env.sh` next to the API secret's hash, and `boot_command` only
+needs to get past the prompt, not fill it with anything load-bearing.
 Rejected: reproducing the configuration by sending keystrokes into OPNsense's post-install
 console setup wizard (the LAN/WAN/OPT interface-name prompts) instead of the importer —
 that wizard only assigns interfaces to physical/`vtnet` devices, has no path to create
