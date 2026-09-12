@@ -383,3 +383,32 @@ contained, but it is custom machinery and still needs an image change for the ta
 Rejected: leaving the Servers VLAN with a normal dynamic pool — simpler, but it puts two
 authorities on the same addresses and invites exactly the drift the no-DHCP rule was
 written to prevent.
+
+### DHCP stays with OPNsense; PowerShell never runs a DHCP server
+
+Why: the original sketch of this project listed DHCP alongside AD DS and DNS as
+PowerShell's job, and the Milestone 6 heading carried that wording forward. The network
+design then gave DHCP to Kea on OPNsense, and Milestone 4 built it. One DHCP authority in
+a lab this size is the whole argument — two would be a design a reviewer questions.
+Rejected: the Windows DHCP Server role on DC01, authorised in Active Directory — a
+genuine Systemintegration skill and a stronger Windows showcase, but it undoes working
+configuration from a finished milestone and adds a DHCP relay hop across the VLAN
+boundary for no functional gain.
+Rejected: splitting it by VLAN, Kea for the server reservations and Windows for the
+clients — demonstrates both, at the cost of two authorities over one small address plan.
+
+### The guest drives itself across reboots; Terraform fires once and stops
+
+Why: promoting a domain controller reboots the machine and drops the WinRM session, and
+so does renaming a host. The `terraform-proxmox` skill already fixes that Terraform's
+last act is bringing the VM up with the first-boot PowerShell in place, so the sequencing
+has to live inside the guest. A script that records which phase it reached and
+re-registers itself to continue after each reboot is also the version that still works
+when a human runs it by hand during a proof run, with no Terraform involved.
+How: a phase marker written to disk, a scheduled task registered on the first run and
+removed when the last phase completes. Every phase is idempotent, per AGENTS.md, so a
+retry after a failure re-runs the phase rather than needing a clean VM.
+Rejected: Terraform orchestrating one remote-exec per reboot boundary — the sequence
+would be visible in the plan, but it puts Active Directory orchestration into Terraform,
+which the skill forbids outright, and it makes a manual re-run impossible without running
+Terraform against a live Proxmox host.
