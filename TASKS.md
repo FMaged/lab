@@ -642,7 +642,7 @@ green in CI against real resources — no host exists to apply them to.
 
    Notes:
 
-6. [ ] Write the manual bootstrap half of the runbook
+6. [x] Write the manual bootstrap half of the runbook
    **What:** runbook section 3a — install from ISO, assign WAN and the three VLAN
    interfaces, set their addresses from the static table, enable the API and create a key.
    **Why:** PLAN.md makes this boundary explicit rather than apologetic, and this section
@@ -654,7 +654,13 @@ green in CI against real resources — no host exists to apply them to.
    it matches `docs/network-design.md`. The section ends with the exact env var names
    section 3b consumes.
 
-   Notes:
+   Notes: split into two explicit passes, not one list — steps 1-5 happen before
+   the VLAN devices exist (VM boot, install, WAN assignment, API enablement),
+   step 6 happens after task 8's terraform apply creates them (assignment +
+   static addressing). Named the assigned interfaces MGMT/SERVERS/CLIENTS rather
+   than leaving OPT1-3, since every later reference reads better that way. Also
+   renamed section 3's remaining placeholder to "3b" so 3a/3b map directly to the
+   PLAN.md decision's two halves.
 
 7. [ ] Write the opnsense/ provider configuration and variables
    **What:** `opnsense/provider.tf` and `opnsense/variables.tf` — the firewall URL and the
