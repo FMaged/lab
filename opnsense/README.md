@@ -1,5 +1,5 @@
 # opnsense/
 
-Router and firewall configuration for the lab VLANs, as Terraform resources against
-the browningluke/opnsense provider. See the `terraform-opnsense` skill for
-conventions and constraints.
+VLAN interfaces, Kea DHCP, firewall rules and NAT as Terraform resources against
+the browningluke/opnsense provider. Assumes a firewall already installed and
+API-enabled by hand — see the `terraform-opnsense` skill and runbook section 3a.

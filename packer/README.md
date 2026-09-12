@@ -1,4 +1,5 @@
 # packer/
 
-Packer HCL2 build for the Windows Server 2025 base image that every VM is cloned
-from. See the `packer-windows` skill for conventions and constraints.
+Builds the two base images every Windows guest clones from: Windows Server 2025
+(DC01, SRV01) and Windows 11 (CL01). See the `packer-windows` skill for
+conventions and constraints.
