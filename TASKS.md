@@ -1040,7 +1040,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    (Milestone 6). `docs/conventions.md`'s and `PLAN.md`'s own "Milestone N"
    references were checked too and are all still accurate — no change needed there.
 
-2. [ ] Write the shared PowerShell module
+2. [x] Write the shared PowerShell module
    **What:** `powershell/SILab.psm1` — logging to a transcript, the phase marker read and
    write, a scheduled-task register and unregister pair, and a guard that makes re-running
    a completed phase a no-op.
@@ -1057,7 +1057,24 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    changes state declares `SupportsShouldProcess`; re-running a phase whose marker is
    already set returns without acting, visible by reading the guard.
 
-   Notes:
+   Notes: confirmed real, not assumed — PSScriptAnalyzer 1.25.0 (the exact version
+   CI pins) is installable locally after all, so every script in this milestone is
+   run through it before being committed, not just left for CI to catch. Two real
+   findings from that first run: `PSUseShouldProcessForStateChangingFunctions`
+   flags `Start-`/`Stop-` verbs too, not just New/Set/Remove, so both transcript
+   functions got `SupportsShouldProcess`; and `PSUseBOMForUnicodeEncodedFile`
+   flags a `.psm1`/`.ps1` file containing non-ASCII characters with no BOM as a
+   Warning (a 5.1 encoding trap the global skill's guidance is about JSON/data
+   files, not source files) — resolved by keeping the file plain ASCII (no
+   em-dashes in comments) rather than adding a BOM, sidestepping the trap
+   entirely. Seven exported functions: `Start-`/`Stop-SILabTranscript`,
+   `Get-SILabPhase`, `Test-SILabPhaseComplete`, `Set-SILabPhase`,
+   `Register-`/`Unregister-SILabResumeTask`. The phase marker is a small JSON
+   file (`Number`/`Name`/`Timestamp`), written via `[IO.File]::WriteAllText`
+   with a UTF-8-no-BOM encoding rather than `Set-Content`, per the same 5.1
+   encoding-trap guidance. `Register-SILabResumeTask` uses an `AtStartup`
+   trigger under the `SYSTEM` principal, not `AtLogOn` — nobody logs on to
+   these guests between phases.
 
 3. [ ] Write the first-boot phase: hostname, static address, DNS
    **What:** the phase that renames the guest, replaces its DHCP-reserved address with the
