@@ -7,8 +7,8 @@ proxmox_node             = "pve"
 proxmox_api_token_id     = "root@pam!packer"
 proxmox_api_token_secret = "REPLACE_ME"
 
-iso_datastore       = "local"
-template_datastore  = "local-lvm"
+iso_datastore      = "local"
+template_datastore = "local-lvm"
 
 win_server_iso_file     = "win-server-2025-de.iso"
 win_server_iso_checksum = "sha256:REPLACE_ME"

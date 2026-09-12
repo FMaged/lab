@@ -46,12 +46,18 @@ source "proxmox-iso" "windows_11" {
   }
 
   # -- Installation media --
-  iso_file     = "${var.iso_datastore}:iso/${var.win11_iso_file}"
-  iso_checksum = var.win11_iso_checksum
+  # boot_iso, not the deprecated top-level iso_file/iso_checksum.
+  boot_iso {
+    type             = "ide"
+    iso_file         = "${var.iso_datastore}:iso/${var.win11_iso_file}"
+    iso_checksum     = var.win11_iso_checksum
+    iso_storage_pool = var.iso_datastore
+  }
 
   additional_iso_files {
-    cd_files = ["files/autounattend-client.xml"]
-    cd_label = "unattend"
+    cd_files         = ["files/autounattend-client.xml"]
+    cd_label         = "unattend"
+    iso_storage_pool = var.iso_datastore
   }
   additional_iso_files {
     type         = "scsi"

@@ -1,26 +1,31 @@
 variable "proxmox_url" {
   type        = string
   description = "Proxmox API URL, e.g. https://proxmox.example.internal:8006/api2/json"
-  default     = ""
+  # Placeholder, not a real endpoint — packer validate requires this non-empty
+  # (an empty string fails its own "must be specified" check), and there is no
+  # host to point it at yet regardless. Matches example.pkrvars.hcl.
+  default = "https://proxmox.example.internal:8006/api2/json"
 }
 
 variable "proxmox_node" {
   type        = string
   description = "Proxmox node name the templates are built on"
-  default     = ""
+  default     = "pve" # placeholder — same reasoning as proxmox_url above.
 }
 
 variable "proxmox_api_token_id" {
   type        = string
   description = "Proxmox API token ID, e.g. root@pam!packer"
-  default     = ""
+  default     = "root@pam!packer" # placeholder — same reasoning as proxmox_url above.
 }
 
 variable "proxmox_api_token_secret" {
   type        = string
   description = "Proxmox API token secret"
-  default     = ""
-  sensitive   = true
+  # "REPLACE_ME", not empty — same reasoning as proxmox_url above. Not a real
+  # secret; sensitive = true is what actually matters here.
+  default   = "REPLACE_ME"
+  sensitive = true
 }
 
 variable "iso_datastore" {

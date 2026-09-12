@@ -20,3 +20,6 @@ packer-manifest.json
 
 # OS / editor
 .DS_Store
+
+# Claude Code session runtime state — not project content
+.claude/scheduled_tasks.lock

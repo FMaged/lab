@@ -38,16 +38,22 @@ source "proxmox-iso" "windows_server_2025" {
   }
 
   # -- Installation media --
-  iso_file     = "${var.iso_datastore}:iso/${var.win_server_iso_file}"
-  iso_checksum = var.win_server_iso_checksum
+  # boot_iso, not the deprecated top-level iso_file/iso_checksum.
+  boot_iso {
+    type             = "ide"
+    iso_file         = "${var.iso_datastore}:iso/${var.win_server_iso_file}"
+    iso_checksum     = var.win_server_iso_checksum
+    iso_storage_pool = var.iso_datastore
+  }
 
   # Generated on the fly from the answer file, and the real VirtIO ISO already on
   # the datastore — two separate CD-ROMs. See autounattend-server.xml's header for
   # why the driver path inside it hedges across drive letters instead of assuming
   # a fixed one.
   additional_iso_files {
-    cd_files = ["files/autounattend-server.xml"]
-    cd_label = "unattend"
+    cd_files         = ["files/autounattend-server.xml"]
+    cd_label         = "unattend"
+    iso_storage_pool = var.iso_datastore
   }
   additional_iso_files {
     type         = "scsi"

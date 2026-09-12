@@ -43,10 +43,16 @@ second scheme here.
   both. Give the VM the hardware rather than disabling the checks with registry edits
   copied from a forum — the supported path is the one worth demonstrating.
 - **This build cannot be run.** There is no Proxmox host, so `packer build` is not
-  available during development and may never be. `packer fmt`, `packer init` and
-  `packer validate` in CI are the only feedback — write the template to be correct on
-  first read rather than iterating on build output, and pin the Proxmox plugin to an
-  exact version.
+  available during development and may never be. Pin the Proxmox plugin to an
+  exact version, since a version bump can't be caught by a real build here.
+- **`fmt`, `init` and `validate` run locally now** — the `packer` CLI is installed
+  (2026-09-11), so use it before pushing rather than guessing at HCL syntax or
+  provider argument names and finding out from a red CI run. This does not change
+  the point above: `packer build` still has no host to build against, so it
+  remains untested until Milestone 8's proof run. `packer init` needs network
+  access to GitHub for plugin downloads, which is unauthenticated-rate-limited
+  (60/hr) — avoid running it back-to-back with a lot of other GitHub API calls
+  from the same machine.
 
 ## Conventions
 
@@ -67,9 +73,27 @@ second scheme here.
 - **`packer validate` requires every variable to have a default**, unlike
   `terraform validate` — a variable with none fails immediately with "Unset
   variable", even though CI never supplies real values. Every variable in
-  `packer/variables.pkr.hcl`, including the sensitive ones, has an empty-string (or
-  `"none"` for an `iso_checksum`) default for exactly this reason. Real values only
+  `packer/variables.pkr.hcl` has one for exactly this reason. Real values only
   ever come from `PKR_VAR_*` at an actual build.
+- **An empty-string default is not always enough**, though — confirmed the hard
+  way once a real `packer` binary existed to check with. The `proxmox-iso`
+  builder's own connection arguments (`proxmox_url`, `node`, `username`,
+  `password`/`token`) each fail their *own* "must be specified" check against `""`,
+  even though `validate` never actually connects to Proxmox. Those four variables
+  use obviously-fake, non-empty placeholders instead (matching
+  `example.pkrvars.hcl`'s values) — `"none"` still works fine for an
+  `iso_checksum`, since that one only checks for a non-empty string with the right
+  shape, not for being genuinely reachable.
+- **`iso_file`/`iso_checksum` directly on the `source` block are deprecated** in
+  favor of a `boot_iso { type = ...; iso_file = ...; iso_checksum = ...;
+  iso_storage_pool = ... }` block. The old form still works (as a warning, not an
+  error) but writing new code against an already-deprecated field on day one
+  isn't worth it.
+- **A generated ISO from `additional_iso_files`' `cd_files`/`cd_content` needs its
+  own `iso_storage_pool`** — without it, `validate` fails with "storage_pool not
+  set for storage of generated ISO from cd_files or cd_content". This is separate
+  from `boot_iso`'s `iso_storage_pool`; each ISO-producing block needs the
+  argument, existing-file ISOs included.
 - `.gitignore`'s `*.pkrvars.hcl` swallows `example.pkrvars.hcl` too — it needs its
   own `!example.pkrvars.hcl` negation line right after, or the committed example
   file silently never stages.
