@@ -1020,7 +1020,7 @@ Terraform, so treat it as fixed unless a task says otherwise.
 
 Branch this milestone per `docs/conventions.md`: one branch, one commit per task, one PR.
 
-1. [ ] Fix the stale milestone numbers in docs/ad-design.md
+1. [x] Fix the stale milestone numbers in docs/ad-design.md
    **What:** the closing section refers to "Milestone 5's PowerShell" and "Milestone 6
    must show CL01" — both written before the re-plan renumbered everything.
    **Why:** this document is the spec the whole milestone implements, and a reader
@@ -1032,9 +1032,15 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    heading in `TASKS.md` describes different work; a grep for "Milestone" across `docs/`
    returns only correct references.
 
-   Notes:
+   Notes: the same drift existed in `docs/runbook.md` — section 1 (Proxmox host
+   install) and section 6 (full rebuild) both still said "Milestone 2" / "Milestone
+   7" from before the dropped-host replan; both are Milestone 8 now. Also fixed one
+   more: section 3's "domain verification waits for Milestone 5" conflated DC01
+   existing as a VM (Milestone 5) with the domain actually being up
+   (Milestone 6). `docs/conventions.md`'s and `PLAN.md`'s own "Milestone N"
+   references were checked too and are all still accurate — no change needed there.
 
-2. [ ] Write the shared PowerShell module
+2. [x] Write the shared PowerShell module
    **What:** `powershell/SILab.psm1` — logging to a transcript, the phase marker read and
    write, a scheduled-task register and unregister pair, and a guard that makes re-running
    a completed phase a no-op.
@@ -1051,9 +1057,26 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    changes state declares `SupportsShouldProcess`; re-running a phase whose marker is
    already set returns without acting, visible by reading the guard.
 
-   Notes:
+   Notes: confirmed real, not assumed — PSScriptAnalyzer 1.25.0 (the exact version
+   CI pins) is installable locally after all, so every script in this milestone is
+   run through it before being committed, not just left for CI to catch. Two real
+   findings from that first run: `PSUseShouldProcessForStateChangingFunctions`
+   flags `Start-`/`Stop-` verbs too, not just New/Set/Remove, so both transcript
+   functions got `SupportsShouldProcess`; and `PSUseBOMForUnicodeEncodedFile`
+   flags a `.psm1`/`.ps1` file containing non-ASCII characters with no BOM as a
+   Warning (a 5.1 encoding trap the global skill's guidance is about JSON/data
+   files, not source files) — resolved by keeping the file plain ASCII (no
+   em-dashes in comments) rather than adding a BOM, sidestepping the trap
+   entirely. Seven exported functions: `Start-`/`Stop-SILabTranscript`,
+   `Get-SILabPhase`, `Test-SILabPhaseComplete`, `Set-SILabPhase`,
+   `Register-`/`Unregister-SILabResumeTask`. The phase marker is a small JSON
+   file (`Number`/`Name`/`Timestamp`), written via `[IO.File]::WriteAllText`
+   with a UTF-8-no-BOM encoding rather than `Set-Content`, per the same 5.1
+   encoding-trap guidance. `Register-SILabResumeTask` uses an `AtStartup`
+   trigger under the `SYSTEM` principal, not `AtLogOn` — nobody logs on to
+   these guests between phases.
 
-3. [ ] Write the first-boot phase: hostname, static address, DNS
+3. [x] Write the first-boot phase: hostname, static address, DNS
    **What:** the phase that renames the guest, replaces its DHCP-reserved address with the
    static one from `docs/network-design.md`, points DNS at DC01, and reboots.
    **Why:** the bootstrap decision in PLAN.md is explicit that the reservation is
@@ -1066,9 +1089,42 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    table for that host; no address is hardcoded in a way that contradicts
    `docs/network-design.md`; the phase marker advances and a reboot is requested.
 
-   Notes:
+   Notes: a real tension surfaced while writing this, not spelled out in the
+   task text: DC01's phase (task 4) needs the DSRM recovery password, and
+   SRV01's phase 2 (task 7) needs the domain admin password, but per the
+   credential-ordering decision in PLAN.md neither password may survive a
+   reboot, and Terraform invokes each entry point exactly once. If this
+   addressing phase rebooted on its own (as its wording literally suggests),
+   the resumed, scheduled-task-triggered invocation would have neither
+   password available, since only the very first invocation carries
+   Terraform's command-line arguments. Resolved by NOT calling
+   Restart-Computer at the end of this phase on either host: it writes the
+   phase-1 marker and falls straight through, in the same invocation, into
+   the credentialed phase that follows (promotion on DC01, join on SRV01) -
+   that phase's own reboot (Install-ADDSForest's, Add-Computer's) is the only
+   one, and it fires after the credential is already consumed. A second
+   consequence: SRV01's hostname change moves out of this phase entirely and
+   into Add-Computer -NewName during its join (task 7), a single supported
+   rename+join operation, rather than a separate Rename-Computer here - DC01
+   has no such combined cmdlet for promotion, so its rename genuinely does
+   stay in this phase, left pending (no -Restart) until Install-ADDSForest's
+   reboot finalizes both together. Confirmed real, not assumed: both files
+   run clean through the locally-installed PSScriptAnalyzer 1.25.0 (see task
+   2's note) once `PSAvoidUsingPlainTextForPassword` was suppressed via
+   `SuppressMessageAttribute` on both password parameters on both scripts
+   (the same accepted tradeoff task 4 anticipates for the recovery password -
+   these arrive as CLI arguments and cannot be SecureString) - and along the
+   way found that the attribute only takes effect placed at the
+   script/function scope naming its target parameter, not attached directly
+   to the parameter declaration inside `param()`, which silently does
+   nothing. `PSReviewUnusedParameter` is also suppressed for
+   `LocalAdminPassword` on both scripts (never used by either - it only ever
+   authenticates Terraform's own WinRM session) and for
+   `DomainAdminPassword` on DC01 only (DC01 never joins anything); SRV01's
+   `DomainAdminPassword` is left un-suppressed and currently still flags as
+   unused, since task 7 is what consumes it.
 
-4. [ ] Write the domain controller promotion phase
+4. [x] Write the domain controller promotion phase
    **What:** the phase that installs AD DS, creates the forest `ad.silab.internal` with
    NetBIOS `SILAB` at the 2025 functional level, renames the default site, and reboots.
    **Why:** this is the centre of the whole project — every later task, and the client
@@ -1087,9 +1143,31 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    `SecureString` before use and appears in no log line or transcript; the marker is written
    before the promotion call; no phase after this one on DC01 takes a credential.
 
-   Notes:
+   Notes: added `-SafeModeAdminPassword` to Bootstrap-DC01.ps1's own parameters
+   now, ahead of task 11 actually wiring it into Terraform's invocation - the
+   promotion phase needs the parameter to exist before it can be told to
+   populate it. `ForestMode`/`DomainMode` use the literal string `'Win2025'`
+   as this project's best-available reading of "functional level 2025" - the
+   exact enum name a real Windows Server 2025 AD DS module expects is
+   unconfirmed until the Milestone 8 proof run, flagged in a comment the same
+   way Milestone 3 flagged the Windows 11 image-index name. Site rename
+   (`Default-First-Site-Name` -> `SILAB-Lab`) and pointing DC01's own DNS at
+   itself both landed as phase 3, not folded into phase 2, because they need
+   the forest to already exist and so can only run on the resumed,
+   post-reboot invocation - along with a `Set-DnsServerForwarder` call to
+   OPNsense (10.10.20.1) that the task text didn't ask for explicitly but
+   `docs/network-design.md`'s DNS section already specifies for DC01's
+   resolver role. Phases 2 and 3 both run with no credential-losing reboot
+   between them and phase 1 (see task 3's note) or each other - only
+   Install-ADDSForest's own reboot fires, between phase 2 and phase 3.
+   Confirmed real: PSScriptAnalyzer 1.25.0 flags `ConvertTo-SecureString
+   -AsPlainText` as `PSAvoidUsingConvertToSecureStringWithPlainText`, an
+   Error-severity rule (not just Warning) - suppressed via the same
+   `SuppressMessageAttribute` mechanism as task 3's plaintext-password
+   findings, since this exact conversion is what the credential decision in
+   PLAN.md requires, not an oversight to fix.
 
-5. [ ] Write the OU tree and the two groups
+5. [x] Write the OU tree and the two groups
    **What:** the `SILAB` top-level OU with `Computers/Servers`, `Computers/Workstations`,
    `Users`, `Groups` and `Service Accounts` beneath it, plus `SILAB-Admins` and
    `SILAB-Helpdesk` as global security groups.
@@ -1103,9 +1181,23 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    `docs/ad-design.md` node for node; re-running creates nothing and errors on nothing;
    no code moves DC01's computer object.
 
-   Notes:
+   Notes: landed as phase 4 in Bootstrap-DC01.ps1, right after the site-rename
+   phase, via two small local functions (`New-SILabOrganizationalUnit`,
+   `New-SILabGroup`) rather than the shared module - task 2 scoped
+   `SILab.psm1` to logging/phase/resume-task concerns only, and nothing but
+   DC01 ever creates an OU or a group, so there is no second caller to
+   justify putting this there instead. Both functions do their own
+   existence check (`Get-ADOrganizationalUnit`/`Get-ADGroup` with a
+   `-Filter` string, per the AD scripting reference) before creating
+   anything, which is what makes a retried phase 4 safe even though the
+   outer phase-marker guard already prevents that in the normal path. The
+   domain DN comes from `(Get-ADDomain).DistinguishedName` rather than a
+   hardcoded `DC=ad,DC=silab,DC=internal` literal, so it can never drift
+   from `$script:ForestDomainName`. Both groups land in the `Groups` OU,
+   which the task didn't say explicitly but is the only OU in the tree
+   that makes sense for them.
 
-6. [ ] Write the three baseline GPOs
+6. [x] Write the three baseline GPOs
    **What:** the domain password and lockout policy at the root, the Workstation Baseline
    linked to `Computers/Workstations`, and the Server Baseline linked to
    `Computers/Servers`.
@@ -1117,17 +1209,45 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    separate from creating so a re-run can repair a missing link without rebuilding the
    policy.
 
-   6.1. [ ] Password and lockout policy at the domain root
-   6.2. [ ] Workstation Baseline, including the logon banner
-   6.3. [ ] Server Baseline
+   6.1. [x] Password and lockout policy at the domain root
+   6.2. [x] Workstation Baseline, including the logon banner
+   6.3. [x] Server Baseline
 
    **Accept:** PSScriptAnalyzer clean; every setting traces to a row in the GPO table in
    `docs/ad-design.md`; each GPO is linked to exactly the container that table names;
    re-running relinks nothing twice and creates no duplicate policy.
 
-   Notes:
+   Notes: a real split surfaced while writing this - the GroupPolicy module's
+   `Set-GPRegistryValue` only reaches Administrative Template / Preference
+   registry values, which cleanly covers the logon banner, wallpaper,
+   Defender, firewall and the SMB1 registry toggle. Min password length,
+   complexity, lockout threshold, and the audit categories are Account
+   Policy / legacy Audit Policy settings instead, which live in a GPO's
+   GptTmpl.inf on SYSVOL and have no dedicated cmdlet at all. Wrote a shared
+   `Set-SILabSecurityTemplate` helper that creates that file directly and
+   wires the Security Settings client-side extension GUID onto the GPO's AD
+   object (a brand-new GPO has no extensions registered, so nothing would
+   ever read the file otherwise), used by both the password-policy GPO and
+   the audit half of the Server Baseline GPO. This is real, documented
+   secedit/GptTmpl.inf mechanics, not invented, but three specific details -
+   the exact file encoding, the versionNumber bit-packing, and whether a
+   fresh GPO's extension list is really empty to just overwrite rather than
+   merge into - are unverified against a real domain controller until the
+   Milestone 8 proof run, flagged in a comment the same way Milestone 3
+   flagged its own unconfirmed details (image-index name, driver letters).
+   Considered using `Set-ADDefaultDomainPasswordPolicy` instead for the
+   password policy, since it is the cmdlet that actually backs Windows'
+   effective enforcement regardless of GPO - decided against it because the
+   task explicitly wants a real GPO object created and linked, and
+   substituting a different mechanism would leave that row undemonstrated.
+   Linking uses `Get-GPInheritance` to check for an existing link before
+   calling `New-GPLink`, since linking an already-linked GPO errors instead
+   of no-op-ing. The Workstation Baseline's wallpaper value is a placeholder
+   path to the stock Windows 11 default image - `docs/ad-design.md` names
+   the setting, not a specific file, and this project has no wallpaper
+   asset of its own.
 
-7. [ ] Write the domain join phase for SRV01 and CL01
+7. [x] Write the domain join phase for SRV01 and CL01
    **What:** the phase that joins a member to `ad.silab.internal` and places its computer
    object in `Computers/Servers` or `Computers/Workstations` according to its role.
    **Why:** `docs/ad-design.md` requires SRV01 to land in `Computers/Servers` and CL01 in
@@ -1146,9 +1266,33 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    or transcript; no phase after the join takes a credential; re-running on an
    already-joined machine is a no-op.
 
-   Notes:
+   Notes: writing this surfaced a real gap in task 4's already-committed
+   code, fixed here rather than left for later - DC01 never actually did
+   anything with `DomainAdminPassword`, but SRV01/CL01 need to authenticate
+   their join as `Administrator` with that exact password, and a brand-new
+   forest's domain Administrator account starts out with whatever password
+   the local Administrator account had *at promotion time*, not a value set
+   afterwards. So DC01's promotion phase (task 4) now resets its local
+   Administrator's password to `DomainAdminPassword` immediately before
+   calling Install-ADDSForest, which is the only point where changing it is
+   both possible (the domain does not exist yet to change a domain account
+   directly) and safe (still the same invocation Terraform's argument
+   arrived in, so nothing has to survive a reboot). Removed the
+   `PSReviewUnusedParameter` suppression for `DomainAdminPassword` on DC01
+   accordingly, since it is genuinely used now. `Wait-SILabDomainController`
+   (LDAP port 389 against `DC01.ad.silab.internal`, 15s poll, 900s timeout)
+   is duplicated identically in both Bootstrap-SRV01.ps1 and the new
+   Bootstrap-CL01.ps1 rather than added to SILab.psm1 - task 2 scoped that
+   module to logging/phase/resume-task concerns only, and this is a small
+   enough function that two copies read better than a third caller
+   justifying a shared one. Both scripts use `Add-Computer -NewName` to join
+   and rename in one supported operation (no separate Rename-Computer, no
+   role parameter to branch on - each script's target OU is a fixed
+   string), landing the computer object directly in its target OU. CL01
+   never gained an addressing phase at all - it stays on DHCP permanently
+   per `docs/network-design.md` - so its join is phase 1, not phase 2.
 
-8. [ ] Write the health check script
+8. [x] Write the health check script
    **What:** `powershell/Test-SILab.ps1` — a read-only check that the forest, OU tree,
    groups, GPO links and both member joins are in the state the design documents describe,
    printing a pass or fail line per item.
@@ -1161,9 +1305,19 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    check maps to a specific row in `docs/ad-design.md` or `docs/network-design.md`; it
    exits non-zero when any check fails.
 
-   Notes:
+   Notes: one `Test-SILabCheck` wrapper (takes a description and a
+   scriptblock, prints `[PASS]`/`[FAIL]`, tracks a failure count) drives 15
+   checks total: forest/domain name, NetBIOS name, domain and forest
+   functional level, the site rename, all 7 OU tree nodes, both groups
+   (name, category, scope), all 3 GPOs (existence and link target), and
+   both member joins (computer object present in its role's OU). Every
+   cmdlet used is a `Get-*` - confirmed by re-reading the file rather than
+   just asserting it, since this is the one script whose whole purpose is
+   being safe to run against a live domain. Meant to run from DC01 (or any
+   domain member with RSAT), not from a specific guest's Bootstrap script -
+   it takes no parameters and reads the domain fresh each time.
 
-9. [ ] Complete runbook sections 4 and 5
+9. [x] Complete runbook sections 4 and 5
    **What:** the remaining half of the domain controller and member sections — running the
    entry point, what each reboot looks like, how to tell a phase resumed correctly, and the
    health check as the closing step.
@@ -1177,9 +1331,23 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    reboot sequence, end with the health check, and carry the never-executed marker the
    other sections use.
 
-   Notes:
+   Notes: section 4 initially referenced "the environment variable table
+   below" for the three guest passwords, copying section 3's pattern - but no
+   such table exists near sections 4/5 (the only one in this file is 3a's
+   Proxmox/OPNsense credential table), and task 11 is what actually creates
+   one. Fixed to name the three `TF_VAR_*` variables directly instead of
+   pointing at a table that does not exist yet. Both sections now describe
+   the real reboot count from tasks 3-7 explicitly - DC01 reboots exactly
+   twice (promotion, then nothing else needs one), SRV01 and CL01 exactly
+   once each (the join) - and name the log path
+   (`C:\ProgramData\SILab\Logs`), the phase marker
+   (`C:\ProgramData\SILab\phase.json`), and each guest's scheduled task name,
+   so "looks unreachable" and "actually hung" have something concrete to
+   check against. Both sections end by pointing at `Test-SILab.ps1` (task 8)
+   as the actual verification step, run once after section 5 rather than
+   duplicated per section, since it checks the whole domain state at once.
 
-10. [ ] Get PSScriptAnalyzer green and prove it still fails
+10. [x] Get PSScriptAnalyzer green and prove it still fails
     **What:** the whole `powershell/` layer clean at Error and Warning in CI, plus a
     throwaway check that a real violation still turns the job red.
     **Why:** this milestone is the first code in the repo with no validator stronger than a
@@ -1192,9 +1360,23 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     analysed; a deliberately introduced violation produces a red run; the scratch commit is
     not merged.
 
-    Notes:
+    Notes: confirmed real, not assumed — ran the exact CI command locally
+    through PSScriptAnalyzer 1.25.0 first (all 5 scripts, 0 issues), then
+    checked PR #6's real check-runs on the milestone branch's head commit
+    (b0b4fc6): all 6 jobs green, `PSScriptAnalyzer` included. Then, same
+    method as Milestones 2/4/5's task 8/10, pushed a throwaway branch
+    (`test/no-ref/prove-powershell-ci-catches-breaks`, off this milestone
+    branch since main doesn't have `powershell/` yet) adding one deliberate
+    `Write-Host` call to `Test-SILab.ps1` — chosen over a cmdlet alias after
+    that alone turned out not to trigger `PSAvoidUsingCmdletAliases` on this
+    analyzer version, confirmed by testing both in isolation before trusting
+    either. Opened as PR #7 (I have no `gh` CLI or token in this environment,
+    same gap Milestone 2 task 1 hit — the user opened it manually so the
+    `pull_request` trigger would fire). Result: `PSScriptAnalyzer` alone went
+    red, all 5 other jobs stayed green, correctly isolating the failure to
+    this layer. Branch deleted, local and remote, without merging.
 
-11. [ ] Add the Safe Mode recovery password to terraform/
+11. [x] Add the Safe Mode recovery password to terraform/
     **What:** a third `sensitive` variable in `terraform/variables.tf`, passed to DC01's
     remote-exec invocation only.
     **Why:** `Install-ADDSForest` requires a directory restore password and Terraform
@@ -1209,7 +1391,21 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     `sensitive = true`; it appears in `vm-dc01.tf` and in no other guest file; the runbook
     table lists it alongside the other two.
 
-    Notes:
+    Notes: "alongside the other two" assumed a table already existed for
+    `local_admin_password`/`domain_admin_password` - it didn't (checked
+    `terraform/example.tfvars` and every table in `docs/runbook.md`; neither
+    ever listed either, correctly, since both are credentials with no
+    default and don't belong in a committed file for the same reason
+    `PROXMOX_VE_API_TOKEN` never did). Added a new three-row table to
+    section 4 instead of a fourth row to a table that isn't there, and left
+    `example.tfvars` untouched rather than adding a precedent-setting
+    password row to it. Real fmt/validate both green locally
+    (terraform 1.16.1-equivalent CLI happens to be installed on this
+    machine, matching Milestone 4/5's own "confirmed real, not assumed"
+    notes) - `dsrm_recovery_password` has no default, is `sensitive = true`,
+    and is passed as `-SafeModeAdminPassword` only in `vm-dc01.tf`'s
+    remote-exec; `vm-srv01.tf`/`vm-cl01.tf` are untouched, matching task 4's
+    parameter list on those two scripts.
 
 ## Milestone 7: The repo reads as a finished portfolio piece
 

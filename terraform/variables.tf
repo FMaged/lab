@@ -61,3 +61,9 @@ variable "domain_admin_password" {
   description = "Domain administrator password, for SRV01/CL01's eventual domain join — consumed by the powershell/ entry point, not by Terraform itself"
   sensitive   = true
 }
+
+variable "dsrm_recovery_password" {
+  type        = string
+  description = "Directory Services Restore Mode password for DC01's Install-ADDSForest call — a separate credential from local_admin_password and domain_admin_password, consumed once during promotion and by no other guest"
+  sensitive   = true
+}
