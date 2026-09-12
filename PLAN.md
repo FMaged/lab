@@ -306,6 +306,23 @@ Rejected: creating it by hand in the Proxmox UI — the install is manual anyway
 VM definition is exactly the part that should not be, since it carries the VLAN tags and
 the hardware shape.
 
+### One milestone is one branch, one task is one commit, one PR per milestone
+
+Why: `TASKS.md` already breaks the work into task-sized pieces, and a commit per task
+makes the git history and the task list the same list — each commit reviewable on its own
+against the task's `Accept:` line. A 40-file milestone diff is not reviewable; ten commits
+behind one PR are. It also gives the repo a visible PR history, which is part of what a
+hiring manager reads.
+How: branch from `main` when a milestone's first task starts, named per
+`docs/conventions.md`. One PR per milestone, not per task — reviewers step through it
+commit by commit. Adopted at Milestone 4; Milestones 1–3 landed as direct commits to
+`main` and are left as they are.
+Rejected: a PR per task — ten PRs per milestone for a solo project, each one merged by its
+own author minutes after opening, which is ceremony rather than review.
+Rejected: continuing to commit straight to `main` — it worked while the repo was documents
+only, but from Milestone 4 on each milestone is a coherent code change that is worth
+reading as one unit.
+
 ### Inter-VLAN traffic is least privilege, with a reason on every rule
 
 Why: three VLANs that can all reach each other are an organisational label, not a

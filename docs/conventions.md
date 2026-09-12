@@ -82,9 +82,18 @@ used, per the same pinning discipline as every other tool in this repo.
 
 ## Branch and commit conventions
 
-Follow the global `git-conventions` skill as written — Conventional Commits, single
-line, no body or footer. This is a solo project with no ticket tracker, so the
+Follow the global `git-branch-conventions` and `git-commit-conventions` skills as
+written — Conventional Commits, single line, no body or footer. This is a solo project
+with no ticket tracker, so the
 `no-ref` branch form is the default: `feature/no-ref/<description>`,
-`docs/no-ref/<description>`. `main` is exempt and is where small, low-risk commits
-(docs, config) land directly; a branch is for anything large enough to want a
-reviewable diff before it merges.
+`docs/no-ref/<description>`.
+
+One milestone is one branch, one task is one commit, one milestone is one PR. Branch
+from `main` when the milestone's first task starts; each task in `TASKS.md` lands as a
+single commit on that branch; the branch merges through one PR when every task in the
+milestone is checked off. A task that cannot land in one commit is too big — split it in
+`TASKS.md` first.
+
+`main` stays exempt from the branch naming rules, and a one-off fix that belongs to no
+milestone (a typo, a broken link) can still land on it directly. Milestones 1–3 predate
+this and landed as direct commits — see the decision in `PLAN.md`.

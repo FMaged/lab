@@ -556,6 +556,9 @@ green in CI against real resources — no host exists to apply them to.
    domain controller — DNS, Kerberos, LDAP, SMB and time — and list those explicitly
    rather than opening the whole Servers VLAN. State that Management is reachable from no
    other VLAN.
+   **Accept:** every row has source, destination, service and a reason. Management appears
+   as a destination in zero rules. Clients reach DC01 on DNS, Kerberos, LDAP, SMB and time
+   and on nothing else. Default-deny and the outbound NAT behaviour are each stated.
 
    2.1. [ ] Client-to-DC service rules, named per service
    2.2. [ ] Management isolation and the default-deny statement
@@ -571,6 +574,8 @@ green in CI against real resources — no host exists to apply them to.
    guest VMIDs yet. The OPNsense VM in task 4 is the first one that needs one.
    **How:** extend the existing conventions file next to the template VMID rule. Keep the
    numbering related to the VLAN layout so the ID says something about the host.
+   **Accept:** four VMIDs listed — OPNsense, DC01, SRV01, CL01 — none inside `9000`–`9099`,
+   none repeated, each one readable back to its VLAN.
 
    Notes:
 
@@ -584,6 +589,10 @@ green in CI against real resources — no host exists to apply them to.
    decision — no endpoint or token in a committed file. Variables for node name,
    datastores and the VLAN IDs, every secret marked `sensitive = true`. Naming follows
    `docs/conventions.md`.
+   **Accept:** `terraform init -backend=false && terraform validate` is green in
+   `terraform/`. No endpoint, token or password literal in any committed file. Every secret
+   variable carries `sensitive = true`. `example.tfvars` lists every variable with a
+   placeholder value.
 
    Notes:
 
@@ -597,6 +606,9 @@ green in CI against real resources — no host exists to apply them to.
    in the project that must not set a single `vlan_id` — note why in a comment, since the
    skill otherwise treats an untagged NIC as a bug. Boot from the OPNsense ISO rather than
    cloning a template; this guest has no Packer image.
+   **Accept:** `terraform validate` green. Two NICs, the trunk one with no `vlan_id` and a
+   comment saying why. `vm_id` matches what task 3 assigned. CPU, memory and disk match
+   `docs/hardware.md`. Tags `lab` and `role-firewall` both present.
 
    Notes:
 
@@ -608,6 +620,9 @@ green in CI against real resources — no host exists to apply them to.
    which settings are deliberately not code.
    **How:** fill in the placeholder using the split from task 1. End the section with the
    exact environment variables the next half expects, so the handover is unambiguous.
+   **Accept:** no placeholder text left in runbook section 3a. Every interface address in
+   it matches `docs/network-design.md`. The section ends with the exact env var names
+   section 3b consumes.
 
    Notes:
 
@@ -619,6 +634,9 @@ green in CI against real resources — no host exists to apply them to.
    **How:** credentials from environment variables only, never a file. Keep the pinned
    `0.26.0` exactly as it is — bumping it is a separate, deliberate commit per
    `docs/conventions.md`.
+   **Accept:** `terraform init -backend=false && terraform validate` is green in
+   `opnsense/`. URL and credentials come from variables only, no literal in any committed
+   file. `versions.tf` still pins `0.26.0`.
 
    Notes:
 
@@ -632,6 +650,10 @@ green in CI against real resources — no host exists to apply them to.
    resolves through the firewall cannot find a domain controller. That sharpens the DNS
    paragraph in `docs/network-design.md`, which currently says only that PowerShell sets
    DNS at first boot; update the doc in the same commit so the two agree.
+   **Accept:** `terraform validate` green. Every VLAN ID and parent interface matches
+   `docs/network-design.md`. Exactly one Kea scope, on VLAN 30, pool
+   `10.10.30.100`–`10.10.30.200`, DNS option `10.10.20.10`. VLANs 10 and 20 have no scope.
+   The DNS paragraph in the design doc agrees, in the same commit.
 
    8.1. [ ] VLAN interfaces, matching the design exactly
    8.2. [ ] Kea scope on VLAN 30 with DC01 as the DNS option
@@ -648,6 +670,9 @@ green in CI against real resources — no host exists to apply them to.
    by port number. Every rule gets a `description` saying what it is for, per the skill.
    Order matters in a filter chain, so keep the file in evaluation order and say so at the
    top. Nothing here may contradict the table from task 2.
+   **Accept:** `terraform validate` green. Every rule carries a non-empty `description`.
+   Every rule in the task-2 table appears exactly once, and no rule appears that is not in
+   that table. The file is in evaluation order and says so at the top.
 
    9.1. [ ] Aliases for hosts and service groups
    9.2. [ ] Filter rules, in evaluation order, each with a reason
@@ -659,12 +684,16 @@ green in CI against real resources — no host exists to apply them to.
     **What:** runbook section 3b — the environment variables, the apply order for the two
     Terraform roots, and how to verify each VLAN routes. Plus a check that the Terraform
     job in CI covers `opnsense/` and `terraform/` now that both hold real resources.
-    **Why:** CLAUDE.md makes a layer unfinished until its runbook section is written, and
+    **Why:** AGENTS.md makes a layer unfinished until its runbook section is written, and
     the two-stage apply from the PLAN.md decision is the kind of ordering that is obvious
     while writing it and lost a month later.
     **How:** state plainly that the verification steps have never been executed, per the
     execution status decision. Confirm the CI matrix picks up both roots and that a
     deliberately malformed resource actually turns the job red.
+    **Accept:** section 3b lists the env vars and the apply order for the two roots, and
+    states the steps have never been executed. The CI Terraform matrix covers both
+    `terraform/` and `opnsense/`. A deliberately malformed resource turns the job red, and
+    is reverted before the task is checked off.
 
     Notes:
 
