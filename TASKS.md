@@ -1124,7 +1124,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    `DomainAdminPassword` is left un-suppressed and currently still flags as
    unused, since task 7 is what consumes it.
 
-4. [ ] Write the domain controller promotion phase
+4. [x] Write the domain controller promotion phase
    **What:** the phase that installs AD DS, creates the forest `ad.silab.internal` with
    NetBIOS `SILAB` at the 2025 functional level, renames the default site, and reboots.
    **Why:** this is the centre of the whole project — every later task, and the client
@@ -1143,7 +1143,29 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    `SecureString` before use and appears in no log line or transcript; the marker is written
    before the promotion call; no phase after this one on DC01 takes a credential.
 
-   Notes:
+   Notes: added `-SafeModeAdminPassword` to Bootstrap-DC01.ps1's own parameters
+   now, ahead of task 11 actually wiring it into Terraform's invocation - the
+   promotion phase needs the parameter to exist before it can be told to
+   populate it. `ForestMode`/`DomainMode` use the literal string `'Win2025'`
+   as this project's best-available reading of "functional level 2025" - the
+   exact enum name a real Windows Server 2025 AD DS module expects is
+   unconfirmed until the Milestone 8 proof run, flagged in a comment the same
+   way Milestone 3 flagged the Windows 11 image-index name. Site rename
+   (`Default-First-Site-Name` -> `SILAB-Lab`) and pointing DC01's own DNS at
+   itself both landed as phase 3, not folded into phase 2, because they need
+   the forest to already exist and so can only run on the resumed,
+   post-reboot invocation - along with a `Set-DnsServerForwarder` call to
+   OPNsense (10.10.20.1) that the task text didn't ask for explicitly but
+   `docs/network-design.md`'s DNS section already specifies for DC01's
+   resolver role. Phases 2 and 3 both run with no credential-losing reboot
+   between them and phase 1 (see task 3's note) or each other - only
+   Install-ADDSForest's own reboot fires, between phase 2 and phase 3.
+   Confirmed real: PSScriptAnalyzer 1.25.0 flags `ConvertTo-SecureString
+   -AsPlainText` as `PSAvoidUsingConvertToSecureStringWithPlainText`, an
+   Error-severity rule (not just Warning) - suppressed via the same
+   `SuppressMessageAttribute` mechanism as task 3's plaintext-password
+   findings, since this exact conversion is what the credential decision in
+   PLAN.md requires, not an oversight to fix.
 
 5. [ ] Write the OU tree and the two groups
    **What:** the `SILAB` top-level OU with `Computers/Servers`, `Computers/Workstations`,
