@@ -2,13 +2,15 @@
 
 [![Validate](https://github.com/FMaged/lab/actions/workflows/validate.yml/badge.svg)](https://github.com/FMaged/lab/actions/workflows/validate.yml)
 
-A small company network built entirely as code — a Proxmox hypervisor, a Windows
-Server 2025 image, a routed multi-VLAN network and Active Directory — that can be
-torn down and rebuilt from this repository alone.
+A small company network defined entirely as code — a Proxmox hypervisor, Windows
+Server 2025 and Windows 11 images, a routed multi-VLAN network and an Active Directory
+domain — written so it can be built and torn down from this repository alone.
 
 It exists to demonstrate Systemintegration skills: hypervisor administration,
-infrastructure as code, Windows Server/AD administration, and network/firewall
-configuration, each done for real rather than described.
+infrastructure as code, Windows Server and Active Directory administration, and network
+and firewall configuration. Every layer is written out in full and checked on every
+push. None of it has been applied to hardware — see [Execution
+status](#execution-status) for exactly what is and is not proven.
 
 ## Architecture
 
@@ -39,10 +41,10 @@ Full diagram with addressing: [docs/network-diagram.md](docs/network-diagram.md)
 
 | Layer | What it does |
 | --- | --- |
-| [packer/](packer/) | Builds the Windows Server 2025 base image |
-| [terraform/](terraform/) | Clones DC01, SRV01, CL01 from that image onto Proxmox |
-| [powershell/](powershell/) | First-boot config: identity, AD promotion, domain join, GPOs |
-| [opnsense/](opnsense/) | Router and firewall config for the lab VLANs |
+| [packer/](packer/) | Builds the two base images — Windows Server 2025 and Windows 11 |
+| [terraform/](terraform/) | Creates all four VMs on Proxmox: the three Windows guests cloned from those images, plus the OPNsense firewall booted from its installer ISO |
+| [powershell/](powershell/) | First-boot config: identity, AD promotion, domain join, GPOs, and a read-only health check |
+| [opnsense/](opnsense/) | VLAN interfaces, DHCP, firewall rules and NAT for the lab |
 
 ## Execution status
 
