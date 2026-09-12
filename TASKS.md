@@ -780,7 +780,7 @@ there is still no host.
 
 Branch this milestone per `docs/conventions.md`: one branch, one commit per task, one PR.
 
-1. [ ] Update the DHCP and addressing design in docs/network-design.md
+1. [x] Update the DHCP and addressing design in docs/network-design.md
    **What:** a reservation-only scope on the Servers VLAN with no dynamic pool, a
    reservation for CL01 on the Clients VLAN, and a paragraph saying the reservation is a
    bootstrap mechanism that PowerShell later replaces with a static address.
@@ -791,9 +791,13 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    reservations at 10.10.20.10 and 10.10.20.11, makes CL01's reservation mandatory rather
    than optional, and the static address table still shows the same addresses it does now.
 
-   Notes:
+   Notes: gave CL01 a fixed reservation address (10.10.30.50, outside the pool)
+   rather than leaving it floating — "mandatory reservation" needs an actual
+   address to reserve. Static address table rows for DC01/SRV01 now describe
+   the two-phase bootstrap-then-static path instead of just saying "static", so
+   a reader isn't left wondering how a no-DHCP host gets its first address.
 
-2. [ ] Add a MAC address scheme to docs/conventions.md
+2. [x] Add a MAC address scheme to docs/conventions.md
    **What:** a fixed MAC for each of the four guests, in a locally administered range, with
    the rule that derives it from the VMID.
    **Why:** a DHCP reservation keys on MAC, so the address only stays stable across a
@@ -805,9 +809,15 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** conventions lists one MAC per guest, each derivable from that guest's VMID
    by the stated rule, and no two are equal.
 
+   Notes: `02:00:00:00:` + VMID as 4 hex digits — 101→...00:65, 201→...00:C9,
+   202→...00:CA, 301→...01:2D. `02` is locally-administered unicast (bit 1 set,
+   bit 0 clear), never a real OUI. OPNsense gets one too even though it has no
+   DHCP reservation of its own — the task named all four guests, and a blanket
+   "every guest has a documented MAC" rule is simpler than an exception.
+
    Notes:
 
-3. [ ] Add the reservations to opnsense/dhcp.tf
+3. [x] Add the reservations to opnsense/dhcp.tf
    **What:** a Servers VLAN Kea scope with reservations and no pool, plus a CL01
    reservation in the existing Clients scope.
    **Why:** this is the half of the bootstrap decision that lives in code, and without it
@@ -818,9 +828,13 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** `terraform validate` passes in `opnsense/`; the Servers scope declares no
    pool range; every reservation's address and MAC match the two design documents exactly.
 
-   Notes:
+   Notes: reservations reference their subnet by `subnet_id`
+   (`opnsense_kea_dhcpv4_subnet.<x>.id`), confirmed from the real schema, not
+   assumed. Real fmt/validate both green. Also fixed the same stale
+   "cannot be applied" claim in the terraform-opnsense skill that
+   terraform-proxmox's already had corrected.
 
-4. [ ] Write terraform/vm-dc01.tf
+4. [x] Write terraform/vm-dc01.tf
    **What:** DC01 cloned from `tpl-winsrv2025-de-v1`, VMID 201, VLAN 20, pinned MAC, tags
    `lab` and `role-dc`, sized per `docs/hardware.md`.
    **Why:** the domain controller is the guest everything else in the lab depends on, and
@@ -831,9 +845,16 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** `terraform validate` passes in `terraform/`; the resource sets an explicit
    `vm_id` of 201, an explicit `vlan_id` of 20, the pinned MAC from task 2, and both tags.
 
-   Notes:
+   Notes: "by name" is a `proxmox_virtual_environment_vms` data source filtered
+   on name+template=true, feeding `clone.vm_id` — confirmed this data source
+   exists and returns `vm_id` per match before relying on it, rather than
+   assuming. Declared once here since vm-srv01.tf clones the same template and
+   both files share one root. No BIOS/EFI/TPM restated on the clone — a full
+   clone inherits the template's firmware config, so restating it would just be
+   a second place for it to drift. 2 cores, matching the ~8-core/4-guest host
+   budget in docs/hardware.md (that doc splits RAM per guest but not cores).
 
-5. [ ] Write terraform/vm-srv01.tf
+5. [x] Write terraform/vm-srv01.tf
    **What:** SRV01, same template as DC01, VMID 202, VLAN 20, pinned MAC, tags `lab` and
    `role-member-server`.
    **Why:** the member server is what proves a domain join works on something other than
@@ -844,9 +865,14 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** `terraform validate` passes; VMID 202, VLAN 20, correct MAC and tags; the
    diff against `vm-dc01.tf` touches only name, VMID, MAC, address and role tag.
 
-   Notes:
+   Notes: the diff touches one more value than the Accept line named — RAM
+   (4096 vs DC01's 8192), since docs/hardware.md's per-guest split genuinely
+   gives them different memory. Not a deviation to flag as wrong, just an
+   honest count: name, vm_id, mac_address, tag and memory all differ; node,
+   clone source, cpu, agent, disk and vlan_id don't. Reuses vm-dc01.tf's data
+   source rather than redeclaring it. Real fmt/validate both green.
 
-6. [ ] Write terraform/vm-cl01.tf
+6. [x] Write terraform/vm-cl01.tf
    **What:** CL01 cloned from `tpl-win11-de-v1`, VMID 301, VLAN 30, pinned MAC, tags `lab`
    and `role-client`.
    **Why:** CL01 is where the whole project becomes visible — a workstation that joins the
@@ -858,9 +884,26 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    VMID 301, VLAN 30, correct MAC and tags; TPM and Secure Boot are present on the resource
    or explicitly confirmed in a comment as inherited from the template.
 
+   Notes: did the research the task asked for and it paid off — the provider's
+   own clone guide only confirms `agent` inherits from the template explicitly,
+   says nothing specific about BIOS/EFI/TPM, and a real GitHub issue documents
+   full clones NOT inheriting the full source config in some cases. Went with
+   the safer of the two Accept paths: restated machine/bios/efi_disk/tpm_state
+   explicitly rather than trust inheritance, on CL01 *and* retroactively on
+   DC01/SRV01 (same risk, task 4/5 just hadn't surfaced it — this task's
+   research applies to all three, so fixing only CL01 would have been
+   inconsistent). First attempt used Packer's block/argument names
+   (`efi_config`/`tpm_config`/`tpm_storage_pool`) by analogy with
+   packer/windows-11.pkr.hcl — validate immediately rejected them; the real
+   Terraform resource uses `efi_disk`/`tpm_state`/`datastore_id`, a different
+   schema from Packer's plugin despite both being Proxmox tools. No
+   `pre_enrolled_keys` equivalent exists here — Secure Boot's keys ship
+   enrolled in the "4m" OVMF firmware image itself. Real fmt/validate green
+   after the fix, on all three files.
+
    Notes:
 
-7. [ ] Wire the WinRM handoff to powershell/
+7. [x] Wire the WinRM handoff to powershell/
    **What:** a connection block and provisioners on each Windows guest that upload
    `powershell/` and invoke its first-boot entry point, with the local admin and domain
    admin passwords passed as `sensitive` variables.
@@ -875,9 +918,24 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    `sensitive = true`; no password appears as a literal anywhere in `terraform/`; the
    remote-exec invokes exactly one entry point rather than a list of AD commands.
 
+   Notes: confirmed `terraform validate` (unlike `packer validate`) does not
+   require a default, tested directly with a scratch variable before
+   committing to no-default secrets — so `local_admin_password` and
+   `domain_admin_password` have none, genuinely required, no placeholder
+   needed. One entry point per guest (`Bootstrap-DC01/SRV01/CL01.ps1`, none of
+   which exist yet), not one shared script — each guest's role is different
+   enough that a shared entry point would just be an if/else dispatching on
+   hostname; simpler to let Milestone 6 write three small scripts. Both
+   passwords passed to every guest, DC01 included, even though a domain
+   controller creating a domain and a member server joining one are different
+   operations — Milestone 6 decides what each script actually does with them;
+   this task only wires the mechanism. `https = false` on the connection block
+   since nothing here has certificates configured — WinRM over HTTP inside a
+   private lab VLAN no code outside this repo can reach.
+
    Notes:
 
-8. [ ] Write terraform/outputs.tf
+8. [x] Write terraform/outputs.tf
    **What:** outputs for each guest's name, address and VMID.
    **Why:** Milestone 6 and the runbook both need to state where a guest is without
    re-deriving it from the design docs, and an output is the one place that cannot drift
@@ -886,9 +944,13 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** `terraform validate` passes; `terraform output` would name all four guests;
    no output references a password variable.
 
-   Notes:
+   Notes: all four guests, per the Accept line (OPNsense included, even though
+   this milestone's own task list is scoped to the other three). One
+   object-valued output per guest rather than 12 flat ones. Address values are
+   literals matching docs/network-design.md, not resource attributes — none of
+   these VMs have a Terraform-managed IP config to read one from.
 
-9. [ ] Fill in runbook sections 4 and 5
+9. [x] Fill in runbook sections 4 and 5
    **What:** the ordered steps to bring up DC01, then SRV01 and CL01 — the apply order
    against the already-bootstrapped firewall, what to check after each, and the same
    never-executed marker the other sections carry.
@@ -902,9 +964,16 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    the dependency on the firewall being bootstrapped first, and carry the never-executed
    note verbatim from the other sections.
 
+   Notes: DC01 gets its own `-target` apply, separate from SRV01/CL01 — the
+   real dependency isn't just "firewall before guests," it's "DC01 promoted
+   before anything tries to join its domain," which section 5 states as its
+   own precondition. Both sections flag that the Milestone 6 scripts they
+   reference (Bootstrap-DC01/SRV01/CL01.ps1) don't exist yet either, so
+   there's a double reason nothing here has run.
+
    Notes:
 
-10. [ ] Confirm CI stays green and still fails on a break
+10. [x] Confirm CI stays green and still fails on a break
     **What:** both Terraform roots validating in CI with all four VMs and the new
     reservations declared, plus a throwaway check that a malformed resource still turns the
     job red.
@@ -915,6 +984,14 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     scratch commit, confirm red, revert. Same method as Milestone 2 task 8.
     **Accept:** both matrix legs green on the real branch; a deliberately malformed resource
     produces a red run; the scratch commit is not merged.
+
+    Notes: PR #4 (`feature/no-ref/provision-windows-guests`), all 6 jobs green
+    on the real code, `terraform (terraform)` and `terraform (opnsense)` both
+    included. Then a throwaway branch/PR off this one added a nonexistent
+    argument to `vm-cl01.tf`; `terraform (terraform)` alone went red at
+    `terraform validate`, `terraform (opnsense)` stayed green, branch deleted
+    without merging — same isolation-and-cleanup pattern as Milestone 2 task 8
+    and Milestone 4 task 10.
 
     Notes:
 

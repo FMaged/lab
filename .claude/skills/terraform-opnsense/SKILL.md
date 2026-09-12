@@ -50,10 +50,11 @@ invent one here; if the design is wrong, change the design first.
   in a way no validator will catch.
 
 - **This configuration cannot be applied.** There is no OPNsense instance to reach,
-  so `plan` and `apply` are unavailable during development. `terraform validate` with
-  `-backend=false` in CI is the only feedback. Validate passes on resource arguments
-  the API would still reject, so read the provider docs for each resource rather than
-  trusting a green build.
+  so `plan` and `apply` are unavailable during development, possibly ever. Validate
+  passes on resource arguments the API would still reject, so read the provider
+  docs for each resource rather than trusting a green build.
+- **`fmt`, `init` and `validate` run locally now** — the `terraform` CLI is
+  installed (2026-09-12). Run them before pushing.
 
 ## Conventions
 

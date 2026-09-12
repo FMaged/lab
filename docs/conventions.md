@@ -83,6 +83,26 @@ address it has that isn't itself a gateway, per the static address table in
 `docs/network-design.md`. A second host on Servers or Clients continues the same
 VLAN's sequence (`203`, `302`, …), never restarting from a round number.
 
+## Guest MAC addresses
+
+`02:00:00:00:` + the VMID above as a 4-hex-digit, big-endian value split across
+the last two octets — so the MAC can be derived from the VMID by eye, and the two
+can never quietly disagree.
+
+| Host | VMID | MAC |
+| --- | --- | --- |
+| OPNsense | 101 | `02:00:00:00:00:65` |
+| DC01 | 201 | `02:00:00:00:00:C9` |
+| SRV01 | 202 | `02:00:00:00:00:CA` |
+| CL01 | 301 | `02:00:00:00:01:2D` |
+
+`02` as the first octet is a locally administered, unicast address (bit 1 set,
+bit 0 clear) — never a real vendor OUI, so it can never collide with actual
+hardware. A DHCP reservation in `opnsense/dhcp.tf` keys on this MAC; Terraform
+pins it explicitly on the matching guest's `network_device` rather than letting
+Proxmox generate one, since a generated MAC changes on rebuild and silently
+misses its reservation. See the bootstrap addressing decision in `PLAN.md`.
+
 ## Formatting and pinning (CI-enforced)
 
 - `terraform fmt` and `packer fmt` clean at all times, in `terraform/`, `opnsense/`
