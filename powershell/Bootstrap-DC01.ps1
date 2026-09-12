@@ -281,6 +281,14 @@ function New-SILabServerBaselineGPO {
 Start-SILabTranscript -ScriptName 'Bootstrap-DC01'
 
 try {
+    # Phase 2's marker is written before Install-ADDSForest, which reboots on its
+    # own. A failed promotion therefore leaves phase 2 marked complete, and the
+    # resume walks straight into phase 3's site rename against a forest that does
+    # not exist. DomainRole 4 and 5 are backup and primary domain controller.
+    Assert-SILabPhaseEffect -Number 2 -Name 'Promotion' -Test {
+        (Get-CimInstance -ClassName Win32_ComputerSystem).DomainRole -in @(4, 5)
+    }
+
     if (-not (Test-SILabPhaseComplete -Number 1)) {
         if ((Get-CimInstance -ClassName Win32_ComputerSystem).Name -ne 'DC01') {
             Rename-Computer -NewName 'DC01' -Force

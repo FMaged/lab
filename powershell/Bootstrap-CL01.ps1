@@ -65,6 +65,13 @@ function Wait-SILabDomainController {
 Start-SILabTranscript -ScriptName 'Bootstrap-CL01'
 
 try {
+    # The join marker is written before Add-Computer -Restart, so a failed join
+    # leaves phase 1 marked complete on an unjoined machine. Catch that rather
+    # than tidying up and exiting zero.
+    Assert-SILabPhaseEffect -Number 1 -Name 'DomainJoin' -Test {
+        (Get-CimInstance -ClassName Win32_ComputerSystem).PartOfDomain
+    }
+
     if (-not (Test-SILabPhaseComplete -Number 1)) {
         # CL01 stays on DHCP permanently (docs/network-design.md) - no
         # addressing phase of its own, unlike DC01/SRV01.
