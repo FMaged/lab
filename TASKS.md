@@ -1865,7 +1865,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    in PLAN.md named Hetzner as an hourly-billed example without checking; see task 2.
    Decision in PLAN.md.
 
-2. [ ] SPIKE: can the rented host install Proxmox unattended, and how does its token reach the operator (max 3h)
+2. [x] SPIKE: can the rented host install Proxmox unattended, and how does its token reach the operator (max 3h)
    **Why:** Proxmox's automated installer is real — `proxmox-auto-install-assistant`
    prepares an ISO carrying `answer.toml`, it runs headless, and it supports first-boot
    hooks. What is unproven is whether an hourly bare metal product will boot that ISO at
@@ -1877,6 +1877,22 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    hypervisor's own first-boot hook — and how the token travels: fetched over SSH, or
    posted to the installer's post-install webhook.
    Output: one decision entry in PLAN.md naming the provider, the answer file delivery, and where orchestration runs
+
+   Notes: `proxmox-auto-install-assistant prepare-iso` confirmed real and current
+   (Proxmox VE 8.2+): embeds `answer.toml` (plaintext `root-password` in `[global]`) plus
+   a first-boot script ordered `fully-up`, which is the point at which a hook can safely
+   mint API tokens. The bigger finding was that the proof-run decision's own framing
+   needed checking, not just Milestone 9's: Hetzner's actual dedicated-hardware line
+   (Server Auction/Robot) bills monthly, not hourly — only its virtualized Cloud product
+   is hourly, and Cloud instances are exactly the "unreliable nested virtualization"
+   category that decision already rejects. Scaleway's Elastic Metal is genuinely hourly
+   with no commitment fee, genuinely bare metal, and lists Proxmox VE as a catalog image
+   directly. Corrected the proof-run decision in place rather than leaving it wrong.
+   Orchestration: chose an operator workstation running `scripts/deploy.sh` (Milestone
+   10) over the hypervisor's own first-boot hook driving the whole build — the hook's
+   only job is minting the Terraform and Packer tokens and writing them to a root-only
+   file, fetched over the same SSH connection Milestone 8 task 4's host firewall rule
+   already allow-lists. Decision in PLAN.md, which also amends the proof-run decision.
 
 3. [ ] Replace the decisions this milestone reverses
    **What:** `PLAN.md` entries recording the move to zero-touch, with every superseded
