@@ -70,7 +70,7 @@ resource "proxmox_virtual_environment_vm" "srv01" {
   # powershell/Bootstrap-SRV01.ps1 does not exist yet — Milestone 6.
   provisioner "remote-exec" {
     inline = [
-      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-SRV01.ps1 -LocalAdminPassword '${var.local_admin_password}' -DomainAdminPassword '${var.domain_admin_password}'",
+      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-SRV01.ps1 -LocalAdminPassword '${local.ps_local_admin_password}' -DomainAdminPassword '${local.ps_domain_admin_password}'",
     ]
   }
 }

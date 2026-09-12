@@ -88,7 +88,7 @@ resource "proxmox_virtual_environment_vm" "dc01" {
   # recover, so neither of their invocations takes this argument.
   provisioner "remote-exec" {
     inline = [
-      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-DC01.ps1 -LocalAdminPassword '${var.local_admin_password}' -DomainAdminPassword '${var.domain_admin_password}' -SafeModeAdminPassword '${var.dsrm_recovery_password}'",
+      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-DC01.ps1 -LocalAdminPassword '${local.ps_local_admin_password}' -DomainAdminPassword '${local.ps_domain_admin_password}' -SafeModeAdminPassword '${local.ps_dsrm_recovery_password}'",
     ]
   }
 }
