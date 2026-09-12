@@ -935,7 +935,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
    Notes:
 
-8. [ ] Write terraform/outputs.tf
+8. [x] Write terraform/outputs.tf
    **What:** outputs for each guest's name, address and VMID.
    **Why:** Milestone 6 and the runbook both need to state where a guest is without
    re-deriving it from the design docs, and an output is the one place that cannot drift
@@ -944,7 +944,11 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** `terraform validate` passes; `terraform output` would name all four guests;
    no output references a password variable.
 
-   Notes:
+   Notes: all four guests, per the Accept line (OPNsense included, even though
+   this milestone's own task list is scoped to the other three). One
+   object-valued output per guest rather than 12 flat ones. Address values are
+   literals matching docs/network-design.md, not resource attributes — none of
+   these VMs have a Terraform-managed IP config to read one from.
 
 9. [ ] Fill in runbook sections 4 and 5
    **What:** the ordered steps to bring up DC01, then SRV01 and CL01 — the apply order
