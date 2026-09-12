@@ -662,7 +662,7 @@ green in CI against real resources — no host exists to apply them to.
    renamed section 3's remaining placeholder to "3b" so 3a/3b map directly to the
    PLAN.md decision's two halves.
 
-7. [ ] Write the opnsense/ provider configuration and variables
+7. [x] Write the opnsense/ provider configuration and variables
    **What:** `opnsense/provider.tf` and `opnsense/variables.tf` — the firewall URL and the
    API credentials read from `OPNSENSE_API_KEY` and `OPNSENSE_API_SECRET`.
    **Why:** this root has its own state and lifecycle per its skill, so it needs its own
@@ -674,7 +674,12 @@ green in CI against real resources — no host exists to apply them to.
    `opnsense/`. URL and credentials come from variables only, no literal in any committed
    file. `versions.tf` still pins `0.26.0`.
 
-   Notes:
+   Notes: confirmed the provider natively reads OPNSENSE_URI/OPNSENSE_API_KEY/
+   OPNSENSE_API_SECRET (a third var beyond what the task text named), so
+   `provider.tf` has an empty body, same pattern as `terraform/providers.tf`.
+   `variables.tf` also declares trunk_parent_interface — task 8 needs it as the
+   VLAN parent, and its value is exactly what runbook 3a step 3 has someone note
+   by hand. Real fmt/init/validate all green.
 
 8. [ ] Write opnsense/interfaces.tf and opnsense/dhcp.tf
    **What:** whichever VLAN interface resources the spike found to be code-side, and a Kea
