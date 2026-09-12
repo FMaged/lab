@@ -15,4 +15,15 @@ if (-not $installer) {
 }
 
 Write-Host "Installing guest tools from $installer"
-Start-Process -FilePath $installer -ArgumentList '/install', '/quiet', '/norestart' -Wait -NoNewWindow
+
+# -PassThru so the exit code can be checked. A native installer does not throw and
+# does not set $LASTEXITCODE through Start-Process, so without this a failed install
+# is silent — and the first symptom would be Terraform hanging until timeout on
+# `agent { enabled = true }`, waiting for a guest agent that was never installed.
+# 3010 is "success, reboot required", which is expected with /norestart.
+$process = Start-Process -FilePath $installer -ArgumentList '/install', '/quiet', '/norestart' `
+    -Wait -NoNewWindow -PassThru
+
+if ($process.ExitCode -notin @(0, 3010)) {
+    throw "Guest tools installer failed with exit code $($process.ExitCode)."
+}

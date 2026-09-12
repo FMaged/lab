@@ -79,6 +79,17 @@ jobs:
             exit 1
           }
 
+  consistency:
+    name: design consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: MACs and addresses match the design documents
+        # The MAC is the interface between terraform/ and opnsense/ — change one
+        # side alone and the guest boots unreachable, with nothing in a plan or a
+        # validate run to say why. Nothing else in this harness catches that.
+        run: python3 .github/scripts/check-design-consistency.py
+
   secrets:
     name: gitleaks
     runs-on: ubuntu-latest
@@ -95,11 +106,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Lychee link check
-        uses: lycheeverse/lychee-action@v2
-        with:
-          args: >-
-            --no-progress
-            --exclude '^https?://'
-            '**/*.md'
-          fail: true
+      - name: Relative links and heading anchors resolve
+        # Was lycheeverse/lychee-action, which downloads a release binary on every
+        # run and then only checked relative links anyway, because external ones
+        # were excluded. It failed once on a TLS error during that download with
+        # nothing wrong in the repository. This needs no network, and it also
+        # checks "#anchor" targets, which the old invocation did not.
+        run: python3 .github/scripts/check-markdown-links.py

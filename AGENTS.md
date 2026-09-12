@@ -53,7 +53,7 @@ is available:
 | `terraform/`, `opnsense/` | `terraform fmt -check -recursive`, then `terraform init -backend=false && terraform validate` |
 | `packer/` | `packer fmt -check .`, then `packer init . && packer validate .` |
 | `powershell/` | `Get-ChildItem -Path powershell -Recurse -Include *.ps1,*.psm1 \| Invoke-ScriptAnalyzer -Severity Error,Warning -Settings powershell/PSScriptAnalyzerSettings.psd1` |
-| whole repo | gitleaks secret scan, lychee markdown link check — push and read the run |
+| whole repo | gitleaks secret scan; `python3 .github/scripts/check-markdown-links.py` and `python3 .github/scripts/check-design-consistency.py`, both runnable locally |
 
 Every commit stays fmt-clean and validate-clean. A red build is the only error message
 this project gets.

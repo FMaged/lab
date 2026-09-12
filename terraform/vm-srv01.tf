@@ -18,8 +18,14 @@ resource "proxmox_virtual_environment_vm" "srv01" {
   machine = "q35"
   bios    = "ovmf"
 
+  # "4m" is required for Secure Boot and the provider defaults to "2m";
+  # pre_enrolled_keys defaults to false. Both per the bpg/proxmox 0.112.0 docs for
+  # this resource. Neither is inherited from the template, so both are set here
+  # explicitly on every UEFI guest.
   efi_disk {
-    datastore_id = var.guest_datastore
+    datastore_id      = var.guest_datastore
+    type              = "4m"
+    pre_enrolled_keys = true
   }
 
   cpu {
@@ -37,7 +43,7 @@ resource "proxmox_virtual_environment_vm" "srv01" {
   disk {
     datastore_id = var.guest_datastore
     interface    = "scsi0"
-    size         = 80
+    size         = 80 # matches the template's own disk size in packer/windows-server-2025.pkr.hcl.
   }
 
   network_device {
@@ -53,6 +59,7 @@ resource "proxmox_virtual_environment_vm" "srv01" {
     user     = "Administrator"
     password = var.local_admin_password
     https    = false
+    use_ntlm = true
     timeout  = "10m"
   }
 
@@ -61,10 +68,10 @@ resource "proxmox_virtual_environment_vm" "srv01" {
     destination = "C:/lab-provisioning"
   }
 
-  # powershell/Bootstrap-SRV01.ps1 does not exist yet — Milestone 6.
+  # Runs powershell/Bootstrap-SRV01.ps1, which takes it from here.
   provisioner "remote-exec" {
     inline = [
-      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-SRV01.ps1 -LocalAdminPassword '${var.local_admin_password}' -DomainAdminPassword '${var.domain_admin_password}'",
+      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-SRV01.ps1 -LocalAdminPassword '${local.ps_local_admin_password}' -DomainAdminPassword '${local.ps_domain_admin_password}'",
     ]
   }
 }

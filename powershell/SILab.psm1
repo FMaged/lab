@@ -245,11 +245,75 @@ function Unregister-SILabResumeTask {
     }
 }
 
+function Assert-SILabPhaseEffect {
+    <#
+    .SYNOPSIS
+        Fail loudly when a phase is marked complete but its effect is absent.
+
+    .DESCRIPTION
+        A phase whose work ends in a reboot must write its marker *before* the
+        call, because the call never returns. The cost is that a failed phase is
+        indistinguishable from a successful one: the marker is set either way, so
+        a re-run skips the phase, tidies up and exits zero, having achieved
+        nothing.
+
+        This closes that gap for any phase whose result can be checked directly.
+        Call it before the phase guards, once per such phase.
+
+    .PARAMETER Number
+        The phase number to check.
+
+    .PARAMETER Name
+        The phase name, used in the error message.
+
+    .PARAMETER Test
+        A scriptblock returning $true when the phase's effect is present. Only
+        evaluated if the phase is marked complete.
+
+    .EXAMPLE
+        Assert-SILabPhaseEffect -Number 1 -Name 'DomainJoin' -Test {
+            (Get-CimInstance -ClassName Win32_ComputerSystem).PartOfDomain
+        }
+
+        Throws if phase 1 is marked complete but the machine is not joined.
+
+    .OUTPUTS
+        None. Throws on inconsistency.
+    #>
+    [CmdletBinding()]
+    [OutputType([void])]
+    param(
+        [Parameter(Mandatory)]
+        [int]$Number,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Name,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [scriptblock]$Test
+    )
+
+    if (-not (Test-SILabPhaseComplete -Number $Number)) {
+        return
+    }
+
+    if (-not (& $Test)) {
+        throw ("Phase $Number ($Name) is marked complete but its effect is absent. " +
+            'The marker is written before the call that reboots, so a failure during ' +
+            'that call leaves exactly this state. Read the transcript under ' +
+            'C:\ProgramData\SILab\Logs to find the cause; the phase marker has to be ' +
+            'corrected by hand before re-running.')
+    }
+}
+
 Export-ModuleMember -Function @(
     'Start-SILabTranscript',
     'Stop-SILabTranscript',
     'Get-SILabPhase',
     'Test-SILabPhaseComplete',
+    'Assert-SILabPhaseEffect',
     'Set-SILabPhase',
     'Register-SILabResumeTask',
     'Unregister-SILabResumeTask'

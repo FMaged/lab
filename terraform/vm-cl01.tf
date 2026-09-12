@@ -9,6 +9,16 @@ data "proxmox_virtual_environment_vms" "win11_template" {
     name   = "template"
     values = [true]
   }
+
+  # Without this, a missing or renamed template fails on vms[0] with an
+  # index-out-of-range error that names neither the template nor the cause —
+  # at the first real apply, when the operator has the least context.
+  lifecycle {
+    postcondition {
+      condition     = length(self.vms) == 1
+      error_message = "Expected exactly one Proxmox template named tpl-win11-de-v1 (docs/conventions.md), used by CL01. Run the Packer build in packer/ first, or check the template was not renamed."
+    }
+  }
 }
 
 resource "proxmox_virtual_environment_vm" "cl01" {
@@ -29,14 +39,18 @@ resource "proxmox_virtual_environment_vm" "cl01" {
   machine = "q35"
   bios    = "ovmf"
 
+  # "4m" is required for Secure Boot and the provider defaults to "2m";
+  # pre_enrolled_keys defaults to false. Both per the bpg/proxmox 0.112.0 docs for
+  # this resource. Neither is inherited from the template, so both are set here
+  # explicitly on every UEFI guest.
   efi_disk {
-    datastore_id = var.guest_datastore
+    datastore_id      = var.guest_datastore
+    type              = "4m"
+    pre_enrolled_keys = true
   }
 
-  # No pre_enrolled_keys-equivalent argument exists on this resource — Secure
-  # Boot's Microsoft keys ship enrolled in the "4m" OVMF firmware image itself,
-  # not as a separate Terraform-level toggle the way Packer's plugin exposes
-  # one. There is nothing more to set here for Secure Boot specifically.
+  # Windows 11 requires a TPM as well as Secure Boot. The firmware side is the
+  # efi_disk block above; this is the other half.
   tpm_state {
     datastore_id = var.guest_datastore
     version      = "v2.0"
@@ -77,6 +91,7 @@ resource "proxmox_virtual_environment_vm" "cl01" {
     user     = "Administrator"
     password = var.local_admin_password
     https    = false
+    use_ntlm = true
     timeout  = "10m"
   }
 
@@ -85,10 +100,10 @@ resource "proxmox_virtual_environment_vm" "cl01" {
     destination = "C:/lab-provisioning"
   }
 
-  # powershell/Bootstrap-CL01.ps1 does not exist yet — Milestone 6.
+  # Runs powershell/Bootstrap-CL01.ps1, which takes it from here.
   provisioner "remote-exec" {
     inline = [
-      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-CL01.ps1 -LocalAdminPassword '${var.local_admin_password}' -DomainAdminPassword '${var.domain_admin_password}'",
+      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-CL01.ps1 -LocalAdminPassword '${local.ps_local_admin_password}' -DomainAdminPassword '${local.ps_domain_admin_password}'",
     ]
   }
 }

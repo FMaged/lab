@@ -66,6 +66,14 @@ must stay fmt-clean and validate-clean against it.
   the user read the raw log from the GitHub UI — the API's job-log endpoint 403s
   without repo-admin auth even on a public repo, so that path is a dead end for
   diagnosing CI from here without help.
+- **2026-09-12, lychee link check:** `lycheeverse/lychee-action@v2` failed at
+  `curl -sfLO` with exit code 35 — a TLS handshake error while downloading its own
+  release binary, not a 404 and nothing to do with the repository's links. Replaced
+  with `.github/scripts/check-markdown-links.py` rather than retried: the job passed
+  `--exclude '^https?://'`, so it was downloading 20 MB to check relative links that
+  need no network at all. The general rule this suggests: a check in this harness
+  should not depend on a download unless the check genuinely needs the network, since
+  a third party's bad minute is otherwise indistinguishable from a real failure.
 - When a job goes red with no clear cause and `/actions/jobs/{id}/logs` 403s ("Must
   have admin rights to Repository"), make the step self-diagnosing (try/catch,
   `Write-Output "::error::<real exception message>"`) rather than guessing twice —

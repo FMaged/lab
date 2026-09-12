@@ -39,6 +39,12 @@ moment a real build runs.
    `winrm_password` have drifted out of sync.
 5. On success, confirm both templates exist in the Proxmox UI: `tpl-winsrv2025-de-v1`
    and `tpl-win11-de-v1`, VM IDs 9000 and 9001, tagged `lab` plus their role tag.
+   Also confirm the QEMU guest agent is installed inside each template, not just
+   that the build succeeded. Every guest sets `agent { enabled = true }`, so a
+   template without the agent does not fail the next apply — it makes Terraform
+   wait for a ping that never arrives until the step times out.
+   `install-guest-tools.ps1` now fails the build on a non-zero installer exit
+   code, so this check should be a formality; confirm it anyway, once.
 6. Re-running `packer build .` after a change always produces a *new* numbered
    template (`-v2`, `-v3`, …) per `docs/conventions.md` — it never overwrites
    `-v1` in place. `terraform/` clones by template *name*, so bumping the version
@@ -166,6 +172,11 @@ Bootstrap script (DC01 gets all three; SRV01 and CL01 get the first two only).
    reservation (`10.10.20.10` — `opnsense/dhcp.tf`). Terraform's WinRM
    connection waits on exactly that address; if the reservation is missing or
    the MAC doesn't match `docs/conventions.md`, this is where it hangs.
+   Two other hangs look identical here and are worth ruling out in order: the
+   guest agent missing from the template (section 2 step 5), and the clone's
+   disk disagreeing with the template's — `terraform/` declares 80 GB for the
+   servers and 64 GB for the client to match the two Packer builds, and a clone
+   can grow a disk but never shrink one.
 3. Terraform uploads `powershell/` and runs `Bootstrap-DC01.ps1` once. From
    here the guest drives itself across two reboots without Terraform's
    involvement — see the reboot decision in `PLAN.md`:

@@ -72,6 +72,13 @@ function Wait-SILabDomainController {
 Start-SILabTranscript -ScriptName 'Bootstrap-SRV01'
 
 try {
+    # Phase 2's marker is written before Add-Computer -Restart, so a failed join
+    # leaves it marked complete on an unjoined machine. Phase 1 needs no such
+    # guard: it has no reboot, so its marker is only reached on success.
+    Assert-SILabPhaseEffect -Number 2 -Name 'DomainJoin' -Test {
+        (Get-CimInstance -ClassName Win32_ComputerSystem).PartOfDomain
+    }
+
     if (-not (Test-SILabPhaseComplete -Number 1)) {
         $adapter = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
         if ($null -eq $adapter) {
@@ -97,7 +104,12 @@ try {
         Wait-SILabDomainController
 
         $securePassword = ConvertTo-SecureString -String $DomainAdminPassword -AsPlainText -Force
-        $credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList 'Administrator', $securePassword
+        # Qualified as a UPN, built from the domain name already defined above
+        # rather than a second literal. A bare 'Administrator' can resolve to the
+        # machine's local account, which on an unjoined machine is exactly the
+        # wrong one and fails without saying why.
+        $credential = New-Object -TypeName System.Management.Automation.PSCredential `
+            -ArgumentList "Administrator@$($script:ForestDomainName)", $securePassword
 
         # Written before the call, not after: Add-Computer -Restart reboots on
         # its own, so the resume must land past this phase, not repeat it.

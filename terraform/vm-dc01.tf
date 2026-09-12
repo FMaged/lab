@@ -10,6 +10,16 @@ data "proxmox_virtual_environment_vms" "winsrv2025_template" {
     name   = "template"
     values = [true]
   }
+
+  # Without this, a missing or renamed template fails on vms[0] with an
+  # index-out-of-range error that names neither the template nor the cause —
+  # at the first real apply, when the operator has the least context.
+  lifecycle {
+    postcondition {
+      condition     = length(self.vms) == 1
+      error_message = "Expected exactly one Proxmox template named tpl-winsrv2025-de-v1 (docs/conventions.md), used by DC01 and SRV01. Run the Packer build in packer/ first, or check the template was not renamed."
+    }
+  }
 }
 
 resource "proxmox_virtual_environment_vm" "dc01" {
@@ -31,8 +41,14 @@ resource "proxmox_virtual_environment_vm" "dc01" {
   machine = "q35"
   bios    = "ovmf"
 
+  # "4m" is required for Secure Boot and the provider defaults to "2m";
+  # pre_enrolled_keys defaults to false. Both per the bpg/proxmox 0.112.0 docs for
+  # this resource. Neither is inherited from the template, so both are set here
+  # explicitly on every UEFI guest.
   efi_disk {
-    datastore_id = var.guest_datastore
+    datastore_id      = var.guest_datastore
+    type              = "4m"
+    pre_enrolled_keys = true
   }
 
   cpu {
@@ -50,7 +66,7 @@ resource "proxmox_virtual_environment_vm" "dc01" {
   disk {
     datastore_id = var.guest_datastore
     interface    = "scsi0"
-    size         = 80
+    size         = 80 # matches the template's own disk size in packer/windows-server-2025.pkr.hcl.
   }
 
   network_device {
@@ -63,12 +79,18 @@ resource "proxmox_virtual_environment_vm" "dc01" {
   # powershell/ — never AD commands inline here, per the terraform-proxmox
   # skill. Host is the DHCP-reservation address (opnsense/dhcp.tf task 3) — the
   # only address DC01 has until its own first-boot script makes it static.
+  #
+  # https = false with use_ntlm = true: HTTPS would need a certificate the
+  # template does not carry, but NTLM encrypts the message payload over the same
+  # port 5985. Without it the administrator password crosses the wire base64
+  # encoded and not encrypted. Setting only one of the two is the mistake.
   connection {
     type     = "winrm"
     host     = "10.10.20.10"
     user     = "Administrator"
     password = var.local_admin_password
     https    = false
+    use_ntlm = true
     timeout  = "10m"
   }
 
@@ -82,7 +104,7 @@ resource "proxmox_virtual_environment_vm" "dc01" {
   # recover, so neither of their invocations takes this argument.
   provisioner "remote-exec" {
     inline = [
-      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-DC01.ps1 -LocalAdminPassword '${var.local_admin_password}' -DomainAdminPassword '${var.domain_admin_password}' -SafeModeAdminPassword '${var.dsrm_recovery_password}'",
+      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-DC01.ps1 -LocalAdminPassword '${local.ps_local_admin_password}' -DomainAdminPassword '${local.ps_domain_admin_password}' -SafeModeAdminPassword '${local.ps_dsrm_recovery_password}'",
     ]
   }
 }
