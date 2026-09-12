@@ -618,7 +618,7 @@ green in CI against real resources — no host exists to apply them to.
 
    Notes:
 
-5. [ ] Write terraform/vm-opnsense.tf
+5. [x] Write terraform/vm-opnsense.tf
    **What:** the firewall VM — two NICs, one on the WAN bridge and one on the VLAN trunk,
    with disk, CPU and memory from `docs/hardware.md`, its VMID from task 3 and the `lab`
    and `role-firewall` tags.
@@ -631,6 +631,14 @@ green in CI against real resources — no host exists to apply them to.
    **Accept:** `terraform validate` green. Two NICs, the trunk one with no `vlan_id` and a
    comment saying why. `vm_id` matches what task 3 assigned. CPU, memory and disk match
    `docs/hardware.md`. Tags `lab` and `role-firewall` both present.
+
+   Notes: fmt+validate both real and green (terraform CLI installed locally now).
+   Added two variables beyond task 4's set — proxmox_bridge_wan/_trunk — since
+   docs/hardware.md never named actual bridge names (it only describes the two
+   viable NIC layouts), so they're configurable rather than hardcoded. Set
+   agent.enabled = false deliberately: OPNsense/FreeBSD has no qemu-guest-agent
+   installed by default, so leaving it on would make Proxmox wait on a ping that
+   never comes.
 
    Notes:
 

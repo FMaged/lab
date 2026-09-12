@@ -33,3 +33,15 @@ variable "network_vlan_clients" {
   description = "VLAN ID for the Clients network — see docs/network-design.md"
   default     = 30
 }
+
+variable "proxmox_bridge_wan" {
+  type        = string
+  description = "Proxmox bridge for OPNsense's WAN uplink — see docs/hardware.md's two NIC layouts"
+  default     = "vmbr0"
+}
+
+variable "proxmox_bridge_trunk" {
+  type        = string
+  description = "Proxmox bridge carrying the tagged VLAN trunk (10/20/30) — see docs/hardware.md"
+  default     = "vmbr1"
+}
