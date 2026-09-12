@@ -77,6 +77,7 @@ status decision below.
 | 29 | [The Safe Mode recovery password is its own Terraform variable](#the-safe-mode-recovery-password-is-its-own-terraform-variable) |
 | 30 | [The repository stays in English throughout](#the-repository-stays-in-english-throughout) |
 | 31 | [The reader-facing surface is a narrative walkthrough plus an explicit limitations section](#the-reader-facing-surface-is-a-narrative-walkthrough-plus-an-explicit-limitations-section) |
+| 32 | [Every credential lives in one gitignored .env at the repository root](#every-credential-lives-in-one-gitignored-env-at-the-repository-root) |
 
 ### Topology is domain controller, member server, client and firewall
 
@@ -171,6 +172,10 @@ problem three gitignored files and two env-var conventions already solve.
 Rejected: baking passwords into the Packer image or its unattend file — the image is
 shared across every clone (see the no-sysprep decision above) and must stay free of
 anything machine- or environment-specific, secrets included.
+Replaced by: Every credential lives in one gitignored .env at the repository root. Only
+the storage half is superseded — the handoff to PowerShell through Terraform's WinRM
+provisioner, and the rule that nothing is written to a file in the repo or left on disk
+in the guest, both still stand.
 
 ### The lab is authored and validated now, and executed only if a host appears
 
@@ -509,3 +514,32 @@ Rejected: a digest of the most revealing decisions pulled to the front — cheap
 the thread connecting them is less convincing than the thread.
 Rejected: tightening the README and stopping there — the fastest option, and the stale
 claims have to be fixed regardless, but it adds nothing a reader did not already have.
+
+### Every credential lives in one gitignored .env at the repository root
+
+Why: credentials were previously spread across shell variables set by hand and two
+gitignored var files, with no single place to look and no single place to fill in. An
+operator starting the proof run had to work out which variables mattered from three
+example files and two runbook tables. One file, copied from a committed template, is the
+difference between a ten-minute start and an hour of hunting — and the proof run is
+billed by the hour.
+How: `example.env` is committed and lists every variable with a placeholder and what it
+is for. `.env` is gitignored and holds the real values, loaded once with
+`set -a; . ./.env; set +a` before any tool runs. Each layer's `example.tfvars` and
+`example.pkrvars.hcl` keeps only non-secret tunables — node name, datastores, VLAN IDs,
+ISO filenames — so no file that is in git has a place for a credential to be typed by
+mistake.
+Note: this supersedes only where secrets are stored. PowerShell still receives them as
+inline parameters from Terraform's WinRM provisioner, and nothing is written to a file
+on the guest.
+Accepted cost: one file now concentrates every credential, so a single mistake exposes
+all of them rather than one layer's worth. `.gitignore` carries an explicit
+`!example.env` negation, because `*.env` would otherwise swallow the committed template
+and leave a reader with nothing to copy — a trap worth naming, since the failure is
+silent.
+Rejected: keeping credentials in the shell only, never on disk — genuinely safer, but it
+means retyping them or leaving them in shell history, and there is no template to hand
+anyone.
+Rejected: one `.env` per layer — a smaller blast radius per file, but the Proxmox
+endpoint and the local administrator password are shared between layers and would have
+to be written twice, which is how two copies drift apart.

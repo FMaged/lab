@@ -20,10 +20,12 @@ moment a real build runs.
    `local` datastore (or whatever `iso_datastore` is set to), named exactly as
    `docs/conventions.md` specifies — `win-server-2025-de.iso`,
    `win-11-pro-de.iso`, `virtio-win-<version>.iso`.
-2. Copy `packer/example.pkrvars.hcl` to `packer/packer.auto.pkrvars.hcl`
-   (gitignored) and fill in the real Proxmox URL, node, API token, ISO
-   checksums and `local_admin_password` — or set the equivalent `PKR_VAR_*`
-   environment variables instead. Never commit the filled-in file.
+2. Set up credentials once for the whole project: `cp example.env .env`, fill in
+   the real values, then `set -a; . ./.env; set +a`. That covers the Proxmox URL
+   and token and `local_admin_password` for this section. Separately, copy
+   `packer/example.pkrvars.hcl` to `packer/packer.auto.pkrvars.hcl` (gitignored)
+   and set the node, datastores and the three ISO checksums — those are not
+   secrets and do not belong in `.env`. Never commit either filled-in file.
 3. From `packer/`: `packer init .` (downloads the pinned Proxmox and
    Windows-Update plugins), then `packer build .`. Both sources build from one
    `packer build .` invocation, since they share the `windows-templates` build
@@ -62,18 +64,23 @@ The manual/code boundary is interface assignment and addressing, not VLANs — s
 the decision in PLAN.md. Concretely, that means this half happens in two passes:
 some of it before `terraform apply` creates the VLAN devices, the rest after.
 
-Set these before starting — step 1 already needs the first two:
+Every credential in this project lives in one gitignored `.env` at the repository
+root. Copy the committed template once, fill it in, and load it before any tool:
 
-| Variable | Used by | Value |
-| --- | --- | --- |
-| `PROXMOX_VE_ENDPOINT` | `terraform/` | the Proxmox API URL, from section 1 |
-| `PROXMOX_VE_API_TOKEN` | `terraform/` | the Proxmox API token created during section 1's host install |
-| `OPNSENSE_URI` | `opnsense/` | `https://` + OPNsense's Management address, `10.10.10.1` |
-| `OPNSENSE_API_KEY` | `opnsense/` | the key from step 5 below |
-| `OPNSENSE_API_SECRET` | `opnsense/` | the secret from step 5 below |
+```
+cp example.env .env
+# edit .env
+set -a; . ./.env; set +a
+```
 
-The two OPNsense values do not exist until step 5 creates them. That is the
-bootstrapping problem this section exists to solve.
+`example.env` documents each variable and what it is for. Four matter before this
+section's step 1: `PROXMOX_VE_ENDPOINT` and `PROXMOX_VE_API_TOKEN`, both from
+section 1's host install, and the Packer equivalents section 2 already used.
+
+The three `OPNSENSE_*` values cannot be filled in yet — they do not exist until
+step 5 below creates them. Leave them as placeholders, complete steps 1 to 5, then
+fill them in and reload `.env` before 3b. That ordering is the bootstrapping
+problem this section exists to solve.
 
 **Before `terraform apply` for `terraform/vm-opnsense.tf`:**
 
@@ -150,19 +157,18 @@ branch and watching that leg go red before reverting.
 
 **Never executed.** Depends on section 3 being fully done first — no gateway, no
 DHCP reservation and no DNS path exist until the firewall is bootstrapped and
-its VLAN devices are assigned and addressed. Also depends on three more
-environment variables — none of the three has a default, since every one is a
-credential, and none belongs in `example.tfvars` for the same reason
-`PROXMOX_VE_API_TOKEN` never landed in a committed file:
+its VLAN devices are assigned and addressed. Also depends on three guest
+passwords, all already in the `.env` loaded back in section 3a:
 
-| Variable | Used by | Value |
-| --- | --- | --- |
-| `TF_VAR_local_admin_password` | `terraform/` | matches Packer's `rotate-admin-password.ps1` value, baked into every template |
-| `TF_VAR_domain_admin_password` | `terraform/` | domain administrator password — SRV01/CL01's join, and reused as DC01's own local Administrator password just before promotion (see step 3) |
-| `TF_VAR_dsrm_recovery_password` | `terraform/` | Directory Services Restore Mode password — DC01's `Install-ADDSForest` call only |
+| Variable | Value |
+| --- | --- |
+| `TF_VAR_local_admin_password` | must equal `PKR_VAR_local_admin_password` — Packer baked it into both templates and Terraform's WinRM connection authenticates with it |
+| `TF_VAR_domain_admin_password` | domain administrator password: SRV01 and CL01's join, and reused as DC01's own local Administrator password just before promotion (see step 3) |
+| `TF_VAR_dsrm_recovery_password` | Directory Services Restore Mode password, for DC01's `Install-ADDSForest` call only |
 
-Terraform passes all three as command-line arguments to each guest's
-Bootstrap script (DC01 gets all three; SRV01 and CL01 get the first two only).
+None has a default, because every one is a credential. Terraform passes all three
+as command-line arguments to each guest's Bootstrap script — DC01 gets all three,
+SRV01 and CL01 the first two.
 
 1. `terraform apply` in `terraform/`, targeted at just DC01 first
    (`-target=proxmox_virtual_environment_vm.dc01`) rather than all four guests

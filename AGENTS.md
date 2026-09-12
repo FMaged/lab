@@ -76,16 +76,21 @@ this project gets.
 
 ## Off-limits
 
-- **No secret lands in git** — no passwords, no Proxmox API token, no tfvars. Secrets are
-  env vars (`TF_VAR_*`, `PKR_VAR_*`, `PROXMOX_VE_*`, `OPNSENSE_API_*`) and gitignored local
-  var files. PowerShell receives its secrets as inline parameters from Terraform's WinRM
-  provisioner, never from a file on disk. See the decision in `PLAN.md`.
+- **No secret lands in git.** Every credential lives in one gitignored `.env` at the
+  repository root, loaded with `set -a; . ./.env; set +a` before any tool runs.
+  `example.env` is the committed template and is the only `.env`-shaped file that may be
+  tracked. The committed `example.tfvars` and `example.pkrvars.hcl` hold non-secret
+  tunables only — never add a credential field to one. PowerShell still receives its
+  secrets as inline parameters from Terraform's WinRM provisioner, never from a file on
+  the guest. See the decision in `PLAN.md`.
 - Do not add repository secrets or credentials to CI. The secrets decision depends on CI
   having none; if that ever has to change, the decision gets revisited first.
 - `.gitleaks.toml` allowlists exactly one string — the Packer build-time bootstrap
   password. Do not add a second entry to silence a finding; fix the finding.
-- Never commit: `*.tfvars`, `*.pkrvars.hcl` (except `example.pkrvars.hcl`), `*.tfstate*`,
-  `.terraform/`, `packer_cache/`, `*.env`.
+- Never commit: `.env`, `*.tfvars`, `*.pkrvars.hcl`, `*.tfstate*`, `.terraform/`,
+  `packer_cache/`. The three committed exceptions are `example.env`, `example.tfvars` and
+  `example.pkrvars.hcl`, each carrying placeholders only. `.gitignore` needs the explicit
+  `!example.env` negation or `*.env` swallows the template silently.
 
 ## Gotchas
 

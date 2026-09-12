@@ -15,8 +15,11 @@ packer_cache/
 packer-manifest.json
 *.box
 
-# Secrets
+# Secrets — one .env at the root holds every credential (see PLAN.md).
+# The negation matters: without it, *.env swallows the committed template.
+.env
 *.env
+!example.env
 .env.*
 
 # OS / editor
