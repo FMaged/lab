@@ -412,3 +412,32 @@ Rejected: Terraform orchestrating one remote-exec per reboot boundary — the se
 would be visible in the plan, but it puts Active Directory orchestration into Terraform,
 which the skill forbids outright, and it makes a manual re-run impossible without running
 Terraform against a live Proxmox host.
+
+### Credentials never outlive the phase that needs them
+
+Why: phases resume after a reboot through a scheduled task, but the passwords Terraform
+passes arrive as command-line arguments and are gone the moment the machine restarts.
+Persisting them would mean writing secrets to the guest's disk, which the secrets
+decision above forbids outright.
+How: phase ordering is the mechanism, not a credential store. Anything needing a
+credential happens before the reboot that loses it. On DC01 the promotion phase consumes
+the recovery password and then reboots; every phase after it runs as SYSTEM on a domain
+controller, which already holds the directory rights to create OUs, groups and GPOs. On
+SRV01 and CL01 the join consumes the domain credential and then reboots; nothing after
+it needs one.
+Consequence: a phase that turns out to need a credential after a reboot is a design
+error, not a reason to add a credential store. Reorder the phases instead.
+Rejected: DPAPI-encrypted credentials written to the guest and deleted when the last
+phase completes — it works regardless of ordering, but it contradicts the secrets
+decision and leaves a window where secrets sit on disk in the guest.
+
+### The Safe Mode recovery password is its own Terraform variable
+
+Why: `Install-ADDSForest` requires a directory restore password, and Terraform currently
+passes only a local administrator and a domain administrator password. The restore
+credential exists for a different purpose and a different lifetime than either, so it
+gets its own `sensitive` variable, passed only to DC01.
+Rejected: reusing the domain administrator password — no Terraform change needed, and no
+operator of this lab will ever perform a directory restore, but it quietly merges two
+credentials that exist for unrelated reasons, which is the kind of shortcut a reviewer
+notices and asks about.
