@@ -1,0 +1,139 @@
+<?xml version="1.0"?>
+<!--
+  Baked into tpl-opnsense-v1 by packer/opnsense.pkr.hcl via the live-image
+  config importer — see the zero-touch decision in PLAN.md. Everything here is
+  what only the installer/importer can set: hostname, interface assignment,
+  VLAN devices, addressing, the root user and one API user. DHCP, NAT and
+  firewall rules stay Terraform's job in opnsense/ — this file's <nat> and
+  <filter> are deliberately empty so nothing here can drift from
+  docs/network-design.md's rule table.
+
+  ${...} placeholders are Packer's own `templatefile()` syntax, rendered from
+  PKR_VAR_* in packer/opnsense.pkr.hcl straight into `cd_content` — no separate
+  render step and no rendered copy ever written back into this file.
+-->
+<opnsense>
+  <theme>opnsense</theme>
+  <system>
+    <optimization>normal</optimization>
+    <hostname>opnsense</hostname>
+    <domain>silab.internal</domain>
+    <group>
+      <name>admins</name>
+      <description>System Administrators</description>
+      <scope>system</scope>
+      <gid>1999</gid>
+      <member>0</member>
+      <priv>page-all</priv>
+    </group>
+    <user>
+      <name>root</name>
+      <descr>System Administrator</descr>
+      <scope>system</scope>
+      <groupname>admins</groupname>
+      <password>${opnsense_root_password_hash}</password>
+      <uid>0</uid>
+    </user>
+    <user>
+      <name>terraform</name>
+      <descr>opnsense/'s Terraform provider — API access only, no console/GUI login expected</descr>
+      <scope>system</scope>
+      <groupname>admins</groupname>
+      <password>*</password>
+      <uid>2000</uid>
+      <apikeys>
+        <item>
+          <key>${opnsense_api_key}</key>
+          <secret>${opnsense_api_secret_hash}</secret>
+        </item>
+      </apikeys>
+    </user>
+    <nextuid>2001</nextuid>
+    <nextgid>2000</nextgid>
+    <timezone>Europe/Berlin</timezone>
+    <language>de_DE</language>
+    <timeservers>0.de.pool.ntp.org 1.de.pool.ntp.org 2.de.pool.ntp.org 3.de.pool.ntp.org</timeservers>
+    <webgui>
+      <protocol>https</protocol>
+    </webgui>
+    <ssh>
+      <group>admins</group>
+    </ssh>
+  </system>
+  <interfaces>
+    <!-- WAN per docs/network-design.md: a DHCP lease from the existing home
+         network. vtnet0 per the zero-touch SPIKE's confirmed vtnet naming. -->
+    <wan>
+      <enable>1</enable>
+      <if>vtnet0</if>
+      <ipaddr>dhcp</ipaddr>
+      <subnet/>
+      <gateway/>
+      <blockpriv>1</blockpriv>
+      <blockbogons>1</blockbogons>
+      <dhcphostname/>
+    </wan>
+    <!-- The three VLAN devices below, not vtnet1 itself — vtnet1 is only ever
+         a VLAN parent, never a logical interface of its own (PLAN.md's
+         manual/code boundary finding). Assigned-interface keys opt1/opt2/opt3
+         are fixed here, not "unconfirmed" the way opnsense/variables.tf's
+         defaults still say — see the note on task 8's clean-up of that file. -->
+    <opt1>
+      <enable>1</enable>
+      <if>vlan0</if>
+      <descr>Management</descr>
+      <ipaddr>10.10.10.1</ipaddr>
+      <subnet>24</subnet>
+    </opt1>
+    <opt2>
+      <enable>1</enable>
+      <if>vlan1</if>
+      <descr>Servers</descr>
+      <ipaddr>10.10.20.1</ipaddr>
+      <subnet>24</subnet>
+    </opt2>
+    <opt3>
+      <enable>1</enable>
+      <if>vlan2</if>
+      <descr>Clients</descr>
+      <ipaddr>10.10.30.1</ipaddr>
+      <subnet>24</subnet>
+    </opt3>
+  </interfaces>
+  <!-- vlanN device IDs are OPNsense's own auto-numbering scheme (overhauled in
+       22.1.4 to be sequential and parent-independent) — residual unknown: the
+       exact vlan0/vlan1/vlan2 assignment is this file's declaration order, not
+       independently verified against a live importer run. If the proof run
+       shows different numbering, only this file and the opt1/2/3 <if> values
+       above need correcting — nothing in opnsense/ references these directly. -->
+  <vlans>
+    <vlan>
+      <if>vtnet1</if>
+      <tag>10</tag>
+      <pcp>0</pcp>
+      <descr>Management</descr>
+      <vlanif>vlan0</vlanif>
+    </vlan>
+    <vlan>
+      <if>vtnet1</if>
+      <tag>20</tag>
+      <pcp>0</pcp>
+      <descr>Servers</descr>
+      <vlanif>vlan1</vlanif>
+    </vlan>
+    <vlan>
+      <if>vtnet1</if>
+      <tag>30</tag>
+      <pcp>0</pcp>
+      <descr>Clients</descr>
+      <vlanif>vlan2</vlanif>
+    </vlan>
+  </vlans>
+  <nat>
+    <outbound>
+      <mode>automatic</mode>
+    </outbound>
+  </nat>
+  <filter>
+  </filter>
+</opnsense>

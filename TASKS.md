@@ -1980,7 +1980,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    both hashes are well-formed `$6$...`; a second run exits 1 and leaves `.env`
    byte-identical; permissions are `600`.
 
-6. [ ] Template the OPNsense config.xml
+6. [x] Template the OPNsense config.xml
    **What:** a committed `config.xml` template under `packer/files/` holding the interface
    assignments, addresses, VLAN devices and API user the firewall boots with, with every
    secret as a placeholder filled from `.env` at build time.
@@ -1996,7 +1996,26 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    `docs/network-design.md`; no password, hash or key value is present, only placeholders;
    gitleaks finds nothing in it.
 
-   Notes:
+   Notes: pulled `opnsense/core`'s real `config.xml.sample` from GitHub rather than
+   guessing the schema, and confirmed live that OPNsense's VLAN device IDs are
+   sequential `vlanN` since the 22.1.4 overhaul, not `<parent>_vlan<tag>` — flagged
+   the exact vlan0/vlan1/vlan2 assignment as a residual unknown for the proof run
+   since nothing else references it directly. Used Packer's native `templatefile()`
+   `${...}` syntax instead of a moustache-style placeholder needing an external
+   render step — `cd_content` in task 7 can pass this file straight through
+   `templatefile()`, no separate render-and-gitignore step needed the way task 9's
+   `answer.toml` needs one. Created a dedicated `terraform` API user rather than
+   attaching the API key to `root`, mirroring the existing per-tool-credential
+   pattern (separate Proxmox tokens for Packer and Terraform) rather than one
+   credential doing double duty. `nat`/`filter` are present but empty — Terraform
+   owns their content in `opnsense/`, and an empty `<filter>` also means no
+   default-allow rule is ever active, matching the least-privilege decision in
+   PLAN.md more closely than OPNsense's own sample default. Extended decision 17's
+   German-throughout spirit to this third template too (`de_DE`, `Europe/Berlin`,
+   German NTP pool) — noted here rather than as a new PLAN.md entry, since it's an
+   application of an existing decision, not a new one. Confirmed real: the file
+   parses as well-formed XML, and `check-design-consistency.py`/
+   `check-markdown-links.py` both still pass.
 
 7. [ ] Write packer/opnsense.pkr.hcl
    **What:** a `proxmox-iso` build that drives the OPNsense installer with `boot_command`
