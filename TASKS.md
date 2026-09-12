@@ -1001,10 +1001,22 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
      built it. The old wording came from the original project sketch. See the DHCP
      decision in PLAN.md. -->
 
-The layer that turns three booted Windows VMs into a domain. One parameterised entry
-point per guest, driving itself across reboots, implementing `docs/ad-design.md` exactly.
-Ends when PSScriptAnalyzer is green on the whole layer — nothing can be run, so the
-analyzer and a careful read are the only evidence.
+The layer that turns three booted Windows VMs into a domain. Three entry points, one per
+guest, driving themselves across reboots, implementing `docs/ad-design.md` exactly. Ends
+when PSScriptAnalyzer is green on the whole layer — nothing can be run, so the analyzer
+and a careful read are the only evidence.
+
+<!-- Corrected 2026-09-12, before any task started. Milestone 5 shipped three named entry
+     points (Bootstrap-DC01/SRV01/CL01.ps1) invoked from C:/lab-provisioning/, with both
+     passwords as plain command-line strings — not one script taking a role parameter,
+     which is what tasks 4 and 7 originally assumed. Task 11 was added for the recovery
+     password Terraform does not yet pass. See the credential decisions in PLAN.md. -->
+
+The interface Milestone 5 already fixed, which this milestone must match exactly:
+`powershell/` is uploaded whole to `C:/lab-provisioning/`, and each guest runs
+`Bootstrap-<HOSTNAME>.ps1` from there with `-LocalAdminPassword` and
+`-DomainAdminPassword` as plain strings. Changing that shape means changing merged
+Terraform, so treat it as fixed unless a task says otherwise.
 
 Branch this milestone per `docs/conventions.md`: one branch, one commit per task, one PR.
 
@@ -1032,7 +1044,9 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **How:** Windows PowerShell 5.1 only — no ternary, no null-coalescing, and watch the
    file encoding trap the global `powershell` skill describes. Every state-changing
    function gets `[CmdletBinding(SupportsShouldProcess)]`. Log to a fixed path under
-   `C:\ProgramData`, never the user profile, since phases run as SYSTEM after a reboot.
+   `C:\ProgramData`, never the user profile, since phases run as SYSTEM after a reboot. The
+   module is imported from `C:/lab-provisioning/`, where Terraform's file provisioner puts
+   the whole `powershell/` directory — not from a system module path.
    **Accept:** PSScriptAnalyzer clean at Error and Warning; every exported function that
    changes state declares `SupportsShouldProcess`; re-running a phase whose marker is
    already set returns without acting, visible by reading the guard.
@@ -1061,13 +1075,17 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    proof in task 7, depends on this forest existing exactly as `docs/ad-design.md`
    specifies.
    **How:** `Install-ADDSForest` reboots on its own, so the phase marker must be written
-   before the call, not after, or the resume lands in the wrong phase. The Safe Mode
-   recovery password arrives as a `SecureString` parameter from Terraform, never a
-   literal. Site rename is a separate, idempotent step.
+   before the call, not after, or the resume lands in the wrong phase. The recovery
+   password arrives as a plain string parameter (task 11 adds it to Terraform) and is
+   converted to a `SecureString` on the first line that touches it — Terraform passes
+   command-line arguments, so the script cannot receive a `SecureString` directly. This
+   phase is the last one on DC01 that has any credential at all; everything after it runs
+   as SYSTEM on a domain controller, per the credential decision in PLAN.md. Site rename is
+   a separate, idempotent step.
    **Accept:** PSScriptAnalyzer clean; domain name, NetBIOS name, functional level and
-   site name all match `docs/ad-design.md` exactly; the recovery password parameter is
-   `SecureString` and appears in no log line; the marker is written before the promotion
-   call.
+   site name all match `docs/ad-design.md` exactly; the recovery password is converted to a
+   `SecureString` before use and appears in no log line or transcript; the marker is written
+   before the promotion call; no phase after this one on DC01 takes a credential.
 
    Notes:
 
@@ -1118,11 +1136,15 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    GPO immediately.
    **How:** join directly into the target OU rather than joining and then moving, so the
    machine never sits briefly in the default `Computers` container out of GPO scope. The
-   join credential is a parameter, never a literal. Waiting for DC01 to answer is part of
-   this phase, since a member booting first is a normal race.
-   **Accept:** PSScriptAnalyzer clean; the target OU is derived from the role parameter
-   and matches `docs/ad-design.md`; the join credential is a `PSCredential` parameter and
-   appears in no log line; re-running on an already-joined machine is a no-op.
+   target OU is fixed per script — `Bootstrap-SRV01.ps1` and `Bootstrap-CL01.ps1` are
+   separate files, so there is no role parameter to branch on. The join credential arrives
+   as a plain string and becomes a `PSCredential` immediately. The join reboots, so it must
+   be the last credential-consuming step in its script. Waiting for DC01 to answer is part
+   of this phase, since a member booting first is a normal race.
+   **Accept:** PSScriptAnalyzer clean; each script targets the OU `docs/ad-design.md`
+   names for that host, with no role branching; the join credential appears in no log line
+   or transcript; no phase after the join takes a credential; re-running on an
+   already-joined machine is a no-op.
 
    Notes:
 
@@ -1169,6 +1191,23 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     **Accept:** the PowerShell job is green on the milestone branch with every script
     analysed; a deliberately introduced violation produces a red run; the scratch commit is
     not merged.
+
+    Notes:
+
+11. [ ] Add the Safe Mode recovery password to terraform/
+    **What:** a third `sensitive` variable in `terraform/variables.tf`, passed to DC01's
+    remote-exec invocation only.
+    **Why:** `Install-ADDSForest` requires a directory restore password and Terraform
+    currently passes only a local admin and a domain admin password, so task 4 has nothing
+    to promote the forest with. PLAN.md decided it is a separate credential rather than a
+    reuse of an existing one.
+    **How:** mirror the two existing password variables — no default, `sensitive = true`,
+    described in terms of what it is for. Add the argument to `vm-dc01.tf` and to nothing
+    else; SRV01 and CL01 have no forest to recover. Update `terraform/example.tfvars` and
+    the runbook's environment variable table in the same commit.
+    **Accept:** `terraform validate` passes; the variable has no default and is
+    `sensitive = true`; it appears in `vm-dc01.tf` and in no other guest file; the runbook
+    table lists it alongside the other two.
 
     Notes:
 
