@@ -1945,7 +1945,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    Milestone 7's audit called out. Confirmed real: `check-markdown-links.py` and
    `check-design-consistency.py` both still pass.
 
-5. [ ] Write scripts/init-env.sh
+5. [x] Write scripts/init-env.sh
    **What:** a script that writes `.env` from `example.env` with every locally generatable
    credential filled in, and refuses to touch a `.env` that already exists.
    **Why:** zero-touch means nobody types a password. Generating credentials into `.env`
@@ -1961,7 +1961,24 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    byte-identical; the two local-admin variables always hold the same value; the file is
    created with owner-only permissions; `shellcheck` passes.
 
-   Notes:
+   Notes: also generates the OPNsense root password's and API secret's sha512crypt
+   hashes with `openssl passwd -6` (task 1's SPIKE confirmed the format), since
+   `config.xml` needs the hash, not the plaintext — both go into three new
+   `example.env` placeholders (`PKR_VAR_opnsense_root_password`,
+   `_root_password_hash`, `_api_secret_hash`), and the stale comment there claiming
+   the OPNsense API credentials "don't exist until the manual bootstrap" was fixed in
+   the same commit. Real bug caught by actually running the script, not just reading
+   it: `set -euo pipefail` plus a bare `x="$(tr ... | head -c N)"` assignment is a
+   classic trap — `tr` reading `/dev/urandom` never reaches EOF, so it always dies of
+   SIGPIPE the moment `head -c` stops reading, and with `pipefail` on, that non-zero
+   status silently aborted the script right after the very first secret was
+   generated, before any substitution ran, with no error printed. Fixed by scoping
+   `set +o pipefail` to the two generator functions, which is safe since each runs in
+   its own command-substitution subshell. Confirmed real end to end in a scratch
+   copy: `shellcheck` clean; first run substitutes every generatable field and
+   leaves the two Proxmox tokens as `REPLACE_ME`; the two local-admin values match;
+   both hashes are well-formed `$6$...`; a second run exits 1 and leaves `.env`
+   byte-identical; permissions are `600`.
 
 6. [ ] Template the OPNsense config.xml
    **What:** a committed `config.xml` template under `packer/files/` holding the interface
