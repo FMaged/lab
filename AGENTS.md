@@ -63,27 +63,14 @@ this project gets.
 - `docs/network-design.md` is the single source of truth for every address, VLAN and
   subnet. `docs/ad-design.md` is the spec `powershell/` implements. Never hardcode a value
   that contradicts either — change the doc first, in the same commit.
-- PowerShell is Windows PowerShell 5.1 only. The global `powershell` skill covers style;
-  the rule on top of it here is that every script is idempotent — clones are provisioned by
-  running them at first boot, and a failed run is retried, not hand-fixed.
-- **The guest drives itself across reboots.** Terraform invokes one entry point per guest
-  and stops. Renaming a host and promoting a domain controller both reboot, so each phase
-  writes a marker before the call that triggers the reboot and a scheduled task resumes the
-  next phase on boot. Never add a second `remote-exec` to Terraform to work around a
-  reboot — see the decision in `PLAN.md`. Phases run as SYSTEM after a reboot, so log to
-  `C:\ProgramData`, never a user profile.
-- **Credentials never outlive the phase that needs them.** Terraform passes passwords as
-  command-line arguments, which are gone after a reboot, and nothing may write them to the
-  guest's disk. Order phases so every credential is consumed before the reboot that loses
-  it — after promotion, SYSTEM on a domain controller already has the rights. A phase that
-  needs a credential after a reboot is a design error; reorder it rather than adding a
-  credential store.
-- Terraform uploads all of `powershell/` to `C:/lab-provisioning/` and runs
-  `Bootstrap-<HOSTNAME>.ps1` from there. Three entry points, one per guest, no role
-  parameter. Changing that shape means changing merged Terraform.
+- PowerShell is Windows PowerShell 5.1 only. The global `powershell` skill covers language
+  style; the project skill `powershell-provisioning` covers the phase architecture those
+  scripts must fit — read it before touching `powershell/`. Two rules are worth knowing
+  without opening it: every script is idempotent, and no credential is ever written to the
+  guest's disk or expected to survive a reboot.
 - Per-layer conventions live in `.claude/skills/`: `terraform-proxmox`,
-  `terraform-opnsense`, `packer-windows`, `github-actions-ci`. Read the one for the layer
-  being touched.
+  `terraform-opnsense`, `packer-windows`, `powershell-provisioning`, `github-actions-ci`.
+  Read the one for the layer being touched.
 - Docs are a deliverable. A layer is not done until its section of `docs/runbook.md` is
   filled in.
 
