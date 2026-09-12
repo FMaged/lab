@@ -1197,7 +1197,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    which the task didn't say explicitly but is the only OU in the tree
    that makes sense for them.
 
-6. [ ] Write the three baseline GPOs
+6. [x] Write the three baseline GPOs
    **What:** the domain password and lockout policy at the root, the Workstation Baseline
    linked to `Computers/Workstations`, and the Server Baseline linked to
    `Computers/Servers`.
@@ -1209,15 +1209,43 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    separate from creating so a re-run can repair a missing link without rebuilding the
    policy.
 
-   6.1. [ ] Password and lockout policy at the domain root
-   6.2. [ ] Workstation Baseline, including the logon banner
-   6.3. [ ] Server Baseline
+   6.1. [x] Password and lockout policy at the domain root
+   6.2. [x] Workstation Baseline, including the logon banner
+   6.3. [x] Server Baseline
 
    **Accept:** PSScriptAnalyzer clean; every setting traces to a row in the GPO table in
    `docs/ad-design.md`; each GPO is linked to exactly the container that table names;
    re-running relinks nothing twice and creates no duplicate policy.
 
-   Notes:
+   Notes: a real split surfaced while writing this - the GroupPolicy module's
+   `Set-GPRegistryValue` only reaches Administrative Template / Preference
+   registry values, which cleanly covers the logon banner, wallpaper,
+   Defender, firewall and the SMB1 registry toggle. Min password length,
+   complexity, lockout threshold, and the audit categories are Account
+   Policy / legacy Audit Policy settings instead, which live in a GPO's
+   GptTmpl.inf on SYSVOL and have no dedicated cmdlet at all. Wrote a shared
+   `Set-SILabSecurityTemplate` helper that creates that file directly and
+   wires the Security Settings client-side extension GUID onto the GPO's AD
+   object (a brand-new GPO has no extensions registered, so nothing would
+   ever read the file otherwise), used by both the password-policy GPO and
+   the audit half of the Server Baseline GPO. This is real, documented
+   secedit/GptTmpl.inf mechanics, not invented, but three specific details -
+   the exact file encoding, the versionNumber bit-packing, and whether a
+   fresh GPO's extension list is really empty to just overwrite rather than
+   merge into - are unverified against a real domain controller until the
+   Milestone 8 proof run, flagged in a comment the same way Milestone 3
+   flagged its own unconfirmed details (image-index name, driver letters).
+   Considered using `Set-ADDefaultDomainPasswordPolicy` instead for the
+   password policy, since it is the cmdlet that actually backs Windows'
+   effective enforcement regardless of GPO - decided against it because the
+   task explicitly wants a real GPO object created and linked, and
+   substituting a different mechanism would leave that row undemonstrated.
+   Linking uses `Get-GPInheritance` to check for an existing link before
+   calling `New-GPLink`, since linking an already-linked GPO errors instead
+   of no-op-ing. The Workstation Baseline's wallpaper value is a placeholder
+   path to the stock Windows 11 default image - `docs/ad-design.md` names
+   the setting, not a specific file, and this project has no wallpaper
+   asset of its own.
 
 7. [ ] Write the domain join phase for SRV01 and CL01
    **What:** the phase that joins a member to `ad.silab.internal` and places its computer

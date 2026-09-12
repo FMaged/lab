@@ -98,6 +98,182 @@ function New-SILabGroup {
     }
 }
 
+function Set-SILabSecurityTemplate {
+    <#
+    .SYNOPSIS
+        Writes Account Policy / Audit Policy settings into a GPO's GptTmpl.inf.
+
+    .DESCRIPTION
+        The GroupPolicy module's own cmdlets (Set-GPRegistryValue) only reach
+        Administrative Template and Preference registry values. Account
+        Policies and legacy audit categories live in a GPO's Security
+        Settings instead (GptTmpl.inf on SYSVOL), which has no dedicated
+        cmdlet - this writes that file directly and wires the Security
+        Settings client-side extension onto the GPO's AD object, since a
+        freshly created GPO has no extensions registered and would
+        otherwise never have this file read at all.
+
+    .PARAMETER Gpo
+        The GPO object from New-GPO/Get-GPO to write the template into.
+
+    .PARAMETER IniContent
+        The GptTmpl.inf section(s) to write, e.g. "[System Access]`nMinimumPasswordLength = 12".
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        $Gpo,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$IniContent
+    )
+
+    $domainDnsName = (Get-ADDomain).DNSRoot
+    $policyDir = "\\$domainDnsName\SysVol\$domainDnsName\Policies\{$($Gpo.Id)}\Machine\Microsoft\Windows NT\SecEdit"
+    $templatePath = Join-Path -Path $policyDir -ChildPath 'GptTmpl.inf'
+
+    if (-not $PSCmdlet.ShouldProcess($templatePath, 'Write security template')) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $policyDir)) {
+        $null = New-Item -Path $policyDir -ItemType Directory -Force
+    }
+
+    $body = "[Unicode]`r`nUnicode=yes`r`n[Version]`r`nsignature=`"`$CHICAGO`$`"`r`nRevision=1`r`n$IniContent`r`n"
+    # GptTmpl.inf is traditionally saved as Unicode (UTF-16LE with a BOM) to
+    # match its own [Unicode] header - unverified against a real GPMC-authored
+    # file until the Milestone 8 proof run, the same kind of residual unknown
+    # as the ForestMode/DomainMode value in the promotion phase.
+    $unicodeEncoding = New-Object -TypeName System.Text.UnicodeEncoding -ArgumentList $false, $true
+    [System.IO.File]::WriteAllText($templatePath, $body, $unicodeEncoding)
+
+    # A brand-new GPO has no client-side extensions registered, so the policy
+    # engine would never read GptTmpl.inf without this. versionNumber packs
+    # (machineVersion << 16 | userVersion); this GPO carries only machine-side
+    # settings and had no prior version, so 65536 (1 << 16) is exact, not
+    # cumulative - a second call to this function on the same GPO would need
+    # to read the existing value first, which none of this milestone's GPOs do.
+    Set-ADObject -Identity $Gpo.Path -Replace @{
+        gPCMachineExtensionNames = '[{827D319E-6EAC-11D2-A4EA-00C04F79F83A}{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}]'
+        versionNumber            = 65536
+    }
+
+    $gptIniPath = "\\$domainDnsName\SysVol\$domainDnsName\Policies\{$($Gpo.Id)}\GPT.INI"
+    (Get-Content -LiteralPath $gptIniPath -Raw) -replace 'Version=\d+', 'Version=65536' |
+        Set-Content -LiteralPath $gptIniPath -Encoding ASCII
+}
+
+function New-SILabPasswordPolicyGPO {
+    <#
+    .SYNOPSIS
+        Creates and links the Domain Password & Lockout Policy GPO.
+
+    .DESCRIPTION
+        Settings come from docs/ad-design.md's GPO table and nowhere else.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    $gpoName = 'Domain Password & Lockout Policy'
+    $gpo = Get-GPO -Name $gpoName -ErrorAction SilentlyContinue
+    if ($null -eq $gpo -and $PSCmdlet.ShouldProcess($gpoName, 'Create GPO')) {
+        $gpo = New-GPO -Name $gpoName
+        Set-SILabSecurityTemplate -Gpo $gpo -IniContent "[System Access]`r`nMinimumPasswordLength = 12`r`nPasswordComplexity = 1`r`nLockoutBadCount = 5"
+    }
+
+    if ($null -ne $gpo) {
+        $domainDN = (Get-ADDomain).DistinguishedName
+        $alreadyLinked = (Get-GPInheritance -Target $domainDN).GpoLinks | Where-Object { $_.GpoId -eq $gpo.Id }
+        if ($null -eq $alreadyLinked -and $PSCmdlet.ShouldProcess($domainDN, "Link GPO '$gpoName'")) {
+            New-GPLink -Guid $gpo.Id -Target $domainDN | Out-Null
+        }
+    }
+}
+
+function New-SILabWorkstationBaselineGPO {
+    <#
+    .SYNOPSIS
+        Creates and links the Workstation Baseline GPO.
+
+    .DESCRIPTION
+        Settings come from docs/ad-design.md's GPO table and nowhere else. The
+        logon banner is the visible proof point this milestone is checked
+        against - see Test-SILab.ps1 (task 8).
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    $gpoName = 'Workstation Baseline'
+    $gpo = Get-GPO -Name $gpoName -ErrorAction SilentlyContinue
+    if ($null -eq $gpo -and $PSCmdlet.ShouldProcess($gpoName, 'Create GPO')) {
+        $gpo = New-GPO -Name $gpoName
+
+        Set-GPRegistryValue -Guid $gpo.Id -Key 'HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System' `
+            -ValueName 'LegalNoticeCaption' -Type String -Value 'SILAB' | Out-Null
+        Set-GPRegistryValue -Guid $gpo.Id -Key 'HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System' `
+            -ValueName 'LegalNoticeText' -Type String -Value 'Authorized use only.' | Out-Null
+
+        # docs/ad-design.md names the setting, not a specific image - this
+        # project has no wallpaper asset of its own, so the stock Windows 11
+        # default stands in.
+        Set-GPRegistryValue -Guid $gpo.Id -Key 'HKCU\Software\Policies\Microsoft\Windows\Desktop' `
+            -ValueName 'Wallpaper' -Type String -Value 'C:\Windows\Web\Wallpaper\Windows\img0.jpg' | Out-Null
+        Set-GPRegistryValue -Guid $gpo.Id -Key 'HKCU\Software\Policies\Microsoft\Windows\Desktop' `
+            -ValueName 'WallpaperStyle' -Type String -Value '10' | Out-Null
+
+        Set-GPRegistryValue -Guid $gpo.Id -Key 'HKLM\Software\Policies\Microsoft\Windows Defender\Real-Time Protection' `
+            -ValueName 'DisableRealtimeMonitoring' -Type DWord -Value 0 | Out-Null
+    }
+
+    if ($null -ne $gpo) {
+        $targetOU = "OU=Workstations,OU=Computers,OU=SILAB,$((Get-ADDomain).DistinguishedName)"
+        $alreadyLinked = (Get-GPInheritance -Target $targetOU).GpoLinks | Where-Object { $_.GpoId -eq $gpo.Id }
+        if ($null -eq $alreadyLinked -and $PSCmdlet.ShouldProcess($targetOU, "Link GPO '$gpoName'")) {
+            New-GPLink -Guid $gpo.Id -Target $targetOU | Out-Null
+        }
+    }
+}
+
+function New-SILabServerBaselineGPO {
+    <#
+    .SYNOPSIS
+        Creates and links the Server Baseline GPO.
+
+    .DESCRIPTION
+        Settings come from docs/ad-design.md's GPO table and nowhere else.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    $gpoName = 'Server Baseline'
+    $gpo = Get-GPO -Name $gpoName -ErrorAction SilentlyContinue
+    if ($null -eq $gpo -and $PSCmdlet.ShouldProcess($gpoName, 'Create GPO')) {
+        $gpo = New-GPO -Name $gpoName
+
+        Set-GPRegistryValue -Guid $gpo.Id -Key 'HKLM\Software\Policies\Microsoft\WindowsFirewall\DomainProfile' `
+            -ValueName 'EnableFirewall' -Type DWord -Value 1 | Out-Null
+        # Registered as a GP Preference (an arbitrary registry value, not an
+        # Administrative Template policy) - there is no ADMX-backed policy for
+        # the SMB1 server component, since it is normally toggled as a Windows
+        # feature rather than a registry policy.
+        Set-GPRegistryValue -Guid $gpo.Id -Key 'HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters' `
+            -ValueName 'SMB1' -Type DWord -Value 0 | Out-Null
+
+        Set-SILabSecurityTemplate -Gpo $gpo -IniContent "[Event Audit]`r`nAuditAccountLogon = 3`r`nAuditLogonEvents = 3`r`nAuditPolicyChange = 3`r`nAuditPrivilegeUse = 3"
+    }
+
+    if ($null -ne $gpo) {
+        $targetOU = "OU=Servers,OU=Computers,OU=SILAB,$((Get-ADDomain).DistinguishedName)"
+        $alreadyLinked = (Get-GPInheritance -Target $targetOU).GpoLinks | Where-Object { $_.GpoId -eq $gpo.Id }
+        if ($null -eq $alreadyLinked -and $PSCmdlet.ShouldProcess($targetOU, "Link GPO '$gpoName'")) {
+            New-GPLink -Guid $gpo.Id -Target $targetOU | Out-Null
+        }
+    }
+}
+
 Start-SILabTranscript -ScriptName 'Bootstrap-DC01'
 
 try {
@@ -211,7 +387,18 @@ try {
         Set-SILabPhase -Number 4 -Name 'OUsAndGroups'
     }
 
-    # Phase 5 (baseline GPOs) lands in task 6.
+    if (-not (Test-SILabPhaseComplete -Number 5)) {
+        Install-WindowsFeature -Name GPMC | Out-Null
+
+        New-SILabPasswordPolicyGPO
+        New-SILabWorkstationBaselineGPO
+        New-SILabServerBaselineGPO
+
+        Set-SILabPhase -Number 5 -Name 'BaselineGPOs'
+
+        # Last phase on DC01 - nothing left for the resume task to trigger.
+        Unregister-SILabResumeTask -TaskName $script:ResumeTaskName
+    }
 }
 finally {
     Stop-SILabTranscript
