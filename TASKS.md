@@ -1415,7 +1415,7 @@ domain member, and what the lab does not do is stated rather than discovered.
 
 Branch this milestone per `docs/conventions.md`: one branch, one commit per task, one PR.
 
-1. [ ] Audit every document for stale claims and wrong cross-references
+1. [x] Audit every document for stale claims and wrong cross-references
    **What:** a single pass over `README.md`, `docs/*.md` and `PLAN.md` collecting
    everything that no longer matches the repo, written up as a checklist the later tasks
    work from.
@@ -1432,7 +1432,26 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    number referenced in `docs/` matches the heading in `TASKS.md`; no item on the list is
    left without either a fix task or a note saying why it stands.
 
-   Notes:
+   Notes: milestone numbers are all correct — Milestone 6 task 1 already fixed
+   `ad-design.md` and `runbook.md`, and every remaining reference matches its heading
+   here. Nothing to do there. The audit also exposed a gap in this milestone's own
+   plan: tasks 2 and 5 cover the top-level README and `docs/README.md`, but nothing
+   covered the four per-layer stub READMEs. Added as task 11.
+
+   Still outstanding, owned by tasks 2 to 6:
+   - `README.md:5` "a Windows Server 2025 image" — singular; there are two templates.
+   - `README.md:11` "each done for real rather than described" — flatly contradicts the
+     execution status section below it. The worst claim in the repo.
+   - `README.md:42` packer row "Builds the Windows Server 2025 base image" — singular.
+   - `README.md:43` terraform row "Clones DC01, SRV01, CL01 from that image" — omits the
+     OPNsense VM this root also creates, and "that image" is now two.
+   - `README.md:44` powershell row omits `Test-SILab.ps1`, the health check.
+   - `README.md:29-36` reading order omits `docs/conventions.md` — the only file in
+     `docs/` that nothing links to — and has no walkthrough entry.
+   - `docs/README.md` is five lines, not an index of the design documents.
+   - `PLAN.md` has 31 decisions and no index; nothing links to an individual entry.
+
+   Found and already fixed — see tasks 7, 8, 9 and 11 below.
 
 2. [ ] Rewrite the README opening and layer index
    **What:** the two opening paragraphs and the layer table, corrected to describe two
@@ -1509,7 +1528,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
    Notes:
 
-7. [ ] Verify the architecture diagram is current and renders on GitHub
+7. [x] Verify the architecture diagram is current and renders on GitHub
    **What:** the Mermaid diagram in the README and the fuller one in
    `docs/network-diagram.md`, checked against the design and against GitHub's renderer.
    **Why:** the diagram is the only visual this project has — there are no screenshots,
@@ -1521,9 +1540,15 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** both diagrams render on the GitHub page with no literal escape sequences
    visible; every host, VLAN and subnet shown matches `docs/network-design.md`.
 
-   Notes:
+   Notes: three problems, not one. The `\n` line breaks were replaced with `<br/>` in
+   ten places — Mermaid documents `<br/>` and `\n` is not reliable across renderer
+   versions. CL01 was missing its address entirely; it now shows the reserved
+   `10.10.30.50`. And OPNsense drew an edge to the `proxmox` subgraph that contained it,
+   which is nonsense — the host's management interface is now its own node. **Not fully
+   verified:** rendering can only be confirmed by pushing and looking at the GitHub page.
+   The escape sequences are provably gone; how it looks is not.
 
-8. [ ] Read the runbook end to end as one document
+8. [x] Read the runbook end to end as one document
    **What:** a continuity pass over `docs/runbook.md` — that sections 2 to 5 read as one
    sequence, and that sections 1 and 6 are clearly marked as needing a host rather than
    looking unfinished.
@@ -1537,9 +1562,16 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    not produce; sections 1 and 6 name Milestone 8 as their owner; the never-executed marker
    is present and consistent across every section.
 
-   Notes:
+   Notes: found a real bug, not a cosmetic one. Section 3a step 1 said to run a plain
+   `terraform apply` to create the firewall VM, which was true when it was written but
+   has been wrong since Milestone 5 put all four guests in that root — following it now
+   would build the three Windows machines before the network exists to serve them, and
+   each would hang on a WinRM handoff to an address nothing is answering. Now
+   `-target`ed at the OPNsense VM. Also moved the environment variable table to the top
+   of 3a, since step 1 already needed two of its entries, and removed two bare "task 8"
+   references a runbook reader has no way to resolve.
 
-9. [ ] Confirm hardware.md still reads correctly with no host chosen
+9. [x] Confirm hardware.md still reads correctly with no host chosen
    **What:** the hardware document reviewed now that buying a host is no longer the plan.
    **Why:** it was written in Milestone 1 expecting hardware to be purchased, and it still
    documents two NIC layouts with a note to narrow to one once a host is chosen. The proof
@@ -1551,7 +1583,12 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    decision is outstanding; both NIC layouts are presented as valid; it agrees with the
    proof run decision in PLAN.md.
 
-   Notes:
+   Notes: the purchase framing was easy to remove, but the document also assumed the WAN
+   uplink is a DHCP lease from the home network — an assumption rented bare metal does
+   not satisfy, since there is no home router and usually one NIC with a public address.
+   Added a section naming both differences and the consequence: on rented metal the
+   default-deny posture becomes load-bearing rather than decorative, because the firewall
+   faces the public internet.
 
 10. [ ] Final read as a stranger, with CI green
     **What:** one pass through the whole repository in reading order, as someone who has
@@ -1566,6 +1603,27 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     branch; any unresolved finding exists as a written task rather than an unrecorded gap.
 
     Notes:
+
+11. [x] Correct the four per-layer stub READMEs
+    **What:** `packer/README.md`, `terraform/README.md`, `powershell/README.md` and
+    `opnsense/README.md`, each describing what its directory actually contains now.
+    **Why:** added by task 1's audit, which found three stale claims in them that no other
+    task covered. These files are one click from the layer index, so a reviewer who follows
+    it reads them — and two still described a single Packer template and a Terraform root
+    that does not create the firewall.
+    **How:** two images not one; Terraform creates four VMs including OPNsense, which boots
+    an ISO rather than cloning; PowerShell gains the health check and a pointer to the
+    `powershell-provisioning` skill. Keep them to the few lines they already are.
+    **Accept:** no stub README describes a single Packer image or omits the OPNsense VM from
+    `terraform/`; `powershell/README.md` names `Test-SILab.ps1` and both skills; each file is
+    still under six lines; every skill and path they name exists.
+
+    Notes: writing these exposed a separate problem. `powershell/README.md` needed to point
+    at the `powershell-provisioning` skill, and that skill was not in the repository — pull
+    request #8 merged an earlier state of the Milestone 6 branch, so neither the skill nor
+    the `AGENTS.md` edit pointing at it ever reached `main`. Both were stranded on
+    `feature/no-ref/ad-powershell-layer-v2` and have been recovered. Worth checking whether
+    anything else from that branch was left behind the same way.
 
 ## Milestone 8: The lab is applied once on rented bare metal and the evidence is captured
 
