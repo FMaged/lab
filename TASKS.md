@@ -1317,7 +1317,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    domain member with RSAT), not from a specific guest's Bootstrap script -
    it takes no parameters and reads the domain fresh each time.
 
-9. [ ] Complete runbook sections 4 and 5
+9. [x] Complete runbook sections 4 and 5
    **What:** the remaining half of the domain controller and member sections — running the
    entry point, what each reboot looks like, how to tell a phase resumed correctly, and the
    health check as the closing step.
@@ -1331,7 +1331,21 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    reboot sequence, end with the health check, and carry the never-executed marker the
    other sections use.
 
-   Notes:
+   Notes: section 4 initially referenced "the environment variable table
+   below" for the three guest passwords, copying section 3's pattern - but no
+   such table exists near sections 4/5 (the only one in this file is 3a's
+   Proxmox/OPNsense credential table), and task 11 is what actually creates
+   one. Fixed to name the three `TF_VAR_*` variables directly instead of
+   pointing at a table that does not exist yet. Both sections now describe
+   the real reboot count from tasks 3-7 explicitly - DC01 reboots exactly
+   twice (promotion, then nothing else needs one), SRV01 and CL01 exactly
+   once each (the join) - and name the log path
+   (`C:\ProgramData\SILab\Logs`), the phase marker
+   (`C:\ProgramData\SILab\phase.json`), and each guest's scheduled task name,
+   so "looks unreachable" and "actually hung" have something concrete to
+   check against. Both sections end by pointing at `Test-SILab.ps1` (task 8)
+   as the actual verification step, run once after section 5 rather than
+   duplicated per section, since it checks the whole domain state at once.
 
 10. [ ] Get PSScriptAnalyzer green and prove it still fails
     **What:** the whole `powershell/` layer clean at Error and Warning in CI, plus a

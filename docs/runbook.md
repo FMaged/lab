@@ -131,7 +131,11 @@ branch and watching that leg go red before reverting.
 
 **Never executed.** Depends on section 3 being fully done first — no gateway, no
 DHCP reservation and no DNS path exist until the firewall is bootstrapped and
-its VLAN devices are assigned and addressed.
+its VLAN devices are assigned and addressed. Also depends on
+`TF_VAR_local_admin_password`, `TF_VAR_domain_admin_password` and
+`TF_VAR_dsrm_recovery_password` all being set (or the equivalent
+`terraform.auto.tfvars` entries) — Terraform passes all three as command-line
+arguments to `Bootstrap-DC01.ps1`.
 
 1. `terraform apply` in `terraform/`, targeted at just DC01 first
    (`-target=proxmox_virtual_environment_vm.dc01`) rather than all four guests
@@ -141,13 +145,39 @@ its VLAN devices are assigned and addressed.
    reservation (`10.10.20.10` — `opnsense/dhcp.tf`). Terraform's WinRM
    connection waits on exactly that address; if the reservation is missing or
    the MAC doesn't match `docs/conventions.md`, this is where it hangs.
-3. Terraform uploads `powershell/` and runs `Bootstrap-DC01.ps1` — this script
-   does not exist yet (Milestone 6), so this step is unexecuted twice over:
-   no host, and no script.
-4. Once Milestone 6 exists: confirm AD DS, DNS and the OU structure from
-   `docs/ad-design.md` are up, and that DC01 now answers on its address
-   *statically* — the DHCP reservation was only ever how it got there the
-   first time.
+3. Terraform uploads `powershell/` and runs `Bootstrap-DC01.ps1` once. From
+   here the guest drives itself across two reboots without Terraform's
+   involvement — see the reboot decision in `PLAN.md`:
+   - **Addressing** — renames the guest to `DC01`, replaces its DHCP address
+     with the static `10.10.20.10`, and points DNS at OPNsense (`10.10.20.1`)
+     since DC01 is not authoritative for itself yet. No reboot of its own —
+     falls straight through into the next phase, so the recovery password
+     never has to survive one (see the credential-ordering decision in
+     PLAN.md).
+   - **Promotion** — installs AD DS, resets the local Administrator's
+     password to `domain_admin_password` (so it carries over into becoming
+     the domain Administrator's password), then calls `Install-ADDSForest`
+     for `ad.silab.internal` / `SILAB` at the 2025 functional level. This
+     call reboots the guest on its own — **the first of DC01's two reboots**.
+     A scheduled task (`SILab-Resume-DC01`, `AtStartup`, `SYSTEM`) resumes
+     `Bootstrap-DC01.ps1` automatically after it.
+   - **Site rename, OU tree and groups, baseline GPOs** — all three run in
+     the same resumed invocation, since none of them need a credential or a
+     reboot: renames the default site to `SILAB-Lab`, points DC01's DNS at
+     itself, creates the `SILAB` OU tree and the two groups from
+     `docs/ad-design.md`, then the three baseline GPOs. The scheduled task is
+     unregistered at the very end — there is nothing left to resume to.
+4. Confirm the transcript for each invocation under
+   `C:\ProgramData\SILab\Logs\Bootstrap-DC01-<timestamp>.log` on DC01, and the
+   current phase in `C:\ProgramData\SILab\phase.json`. A guest sitting
+   unreachable is expected between step 3's promotion phase and its reboot
+   completing — check `Get-ScheduledTask -TaskName 'SILab-Resume-DC01'` exists
+   if it looks stuck rather than assuming a hang.
+5. Confirm DC01 now answers on `10.10.20.10` *statically* — the DHCP
+   reservation was only ever how it got there the first time — and that
+   `docs/ad-design.md`'s forest, OU tree and GPOs are all present. Section 5's
+   closing step runs the actual health check for both this section and the
+   next.
 
 ## 5. SRV01 and CL01 — join the domain
 
@@ -158,14 +188,35 @@ doesn't exist yet has nothing to join.
    guests (or the whole root — DC01's apply is now a no-op). Both can go in
    the same apply; neither depends on the other, only on DC01.
 2. Each picks up its own DHCP reservation (`10.10.20.11` for SRV01,
-   `10.10.30.50` for CL01) and gets its `Bootstrap-SRV01.ps1` /
-   `Bootstrap-CL01.ps1` run over WinRM — neither script exists yet, same
-   double-unexecuted caveat as section 4.
-3. Once Milestone 6 exists: confirm both show up as domain-joined computer
-   objects in the OUs `docs/ad-design.md` specifies (`Computers/Servers` for
-   SRV01, `Computers/Workstations` for CL01), and that CL01's logon screen
-   shows the Workstation Baseline GPO's banner — the one visible proof point
-   the whole lab has been building toward since Milestone 1.
+   `10.10.30.50` for CL01) and Terraform runs its own Bootstrap script once:
+   - **SRV01** (`Bootstrap-SRV01.ps1`) — an addressing phase first (static
+     `10.10.20.11`, DNS pointed at DC01), no reboot, falling straight through
+     into the join phase in the same invocation. The join
+     (`Add-Computer -NewName 'SRV01' ... -OUPath 'Computers/Servers'`) waits
+     for DC01 to answer on LDAP first — booting before DC01 finishes
+     promoting is a normal race, not a failure — then consumes
+     `domain_admin_password` and reboots on its own. A scheduled task
+     (`SILab-Resume-SRV01`) resumes and unregisters itself once the join has
+     completed.
+   - **CL01** (`Bootstrap-CL01.ps1`) — no addressing phase at all, since CL01
+     stays on DHCP permanently. Waits for DC01 the same way, then joins
+     directly with `-NewName 'CL01' -OUPath 'Computers/Workstations'`,
+     reboots, and its own scheduled task (`SILab-Resume-CL01`) unregisters
+     itself afterward.
+3. Confirm both show up as domain-joined computer objects in the OUs
+   `docs/ad-design.md` specifies (`Computers/Servers` for SRV01,
+   `Computers/Workstations` for CL01), and that CL01's logon screen shows the
+   Workstation Baseline GPO's banner — the one visible proof point the whole
+   lab has been building toward since Milestone 1. As with DC01, a transcript
+   for each invocation lives under `C:\ProgramData\SILab\Logs` on the guest
+   in question, and a phase stuck between the join call and its reboot
+   completing looks unreachable rather than hung.
+4. Close both sections by copying `powershell/Test-SILab.ps1` to DC01 (or any
+   domain member with RSAT) and running it: `.\Test-SILab.ps1`. It is
+   read-only, prints one `[PASS]`/`[FAIL]` line per row of
+   `docs/ad-design.md` and `docs/network-design.md`, and exits non-zero if
+   anything is missing — the actual verification step for every claim in
+   sections 4 and 5, not just a suggestion to look around by hand.
 
 ## 6. Full rebuild, start to finish
 
