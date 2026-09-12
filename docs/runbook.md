@@ -93,13 +93,39 @@ Environment variables the code half (3b) expects to already be set:
 | --- | --- | --- |
 | `PROXMOX_VE_ENDPOINT` | `terraform/` | the Proxmox API URL |
 | `PROXMOX_VE_API_TOKEN` | `terraform/` | the Proxmox API token from step above (Milestone 4's own bootstrap, not this one) |
+| `OPNSENSE_URI` | `opnsense/` | `https://` + OPNsense's Management address, `10.10.10.1` |
 | `OPNSENSE_API_KEY` | `opnsense/` | the key from step 5 |
 | `OPNSENSE_API_SECRET` | `opnsense/` | the secret from step 5 |
 
 ### 3b. Code — VLANs, DHCP, firewall
 
-*(Task 10 — fills in once tasks 7–9 land: the two-stage apply order for
-`terraform/` and `opnsense/`, and how to verify each VLAN actually routes.)*
+Two roots, and they apply in a fixed order — `opnsense/` cannot run before 3a's
+manual steps give it an API to talk to, and its own VLAN devices don't exist
+for step 6 of 3a to assign until this runs once.
+
+1. `terraform apply` in `terraform/` (already done, to bring the OPNsense VM
+   up — see 3a step 1). Nothing else in this root exists yet; Milestone 5 adds
+   the three Windows guests to it.
+2. Complete 3a steps 2–5 (install, WAN assignment, enable the API).
+3. `terraform init && terraform apply` in `opnsense/` — creates the three VLAN
+   devices, the Clients DHCP scope, the aliases, every filter rule and the
+   outbound NAT rule.
+4. Complete 3a step 6 (assign each VLAN device to an interface, address it).
+5. Verify: from a host on each VLAN, confirm it can reach its gateway and (for
+   Clients) that it received a DHCP lease with DC01 as its DNS server. Full
+   client-to-DC01 and domain verification waits for Milestone 5 — there's no
+   DC01 yet to actually test against.
+
+Re-running `terraform apply` in `opnsense/` after a change is safe and expected
+— unlike the Packer templates, this root's resources are meant to be updated in
+place, not replaced.
+
+**CI:** the Terraform job in `.github/workflows/validate.yml` already matrixes
+over both `terraform/` and `opnsense/` (added in Milestone 2, before either root
+held anything), so no workflow change was needed to cover this milestone's new
+resources — confirmed by pushing this milestone's real code and watching both
+matrix legs go green, then deliberately breaking one resource on a throwaway
+branch and watching that leg go red before reverting.
 
 ## 4. DC01 — domain controller
 

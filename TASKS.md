@@ -742,7 +742,7 @@ green in CI against real resources — no host exists to apply them to.
    the VLAN ID variables, used everywhere instead of hand-typed subnet
    literals. Real fmt/validate both green after the fix.
 
-10. [ ] Fill in the code half of the runbook and confirm CI is green
+10. [x] Fill in the code half of the runbook and confirm CI is green
     **What:** runbook section 3b — the environment variables, the apply order for the two
     Terraform roots, and how to verify each VLAN routes. Plus a check that the Terraform
     job in CI covers `opnsense/` and `terraform/` now that both hold real resources.
@@ -756,6 +756,18 @@ green in CI against real resources — no host exists to apply them to.
     states the steps have never been executed. The CI Terraform matrix covers both
     `terraform/` and `opnsense/`. A deliberately malformed resource turns the job red, and
     is reverted before the task is checked off.
+
+    Notes: also added OPNSENSE_URI to the env var table — a third variable the
+    provider reads natively, discovered in task 7, that the original task text
+    didn't name. Confirmed real, not assumed: pushed this milestone's actual
+    code as a PR (`feature/no-ref/opnsense-vlan-routing`) and watched all 6 CI
+    jobs go green, `terraform (opnsense)` and `terraform (terraform)` both
+    included — the matrix needed no changes since it already covered both
+    roots from Milestone 2. Then, on a separate throwaway branch/PR off this
+    one, added a nonexistent argument to `opnsense/dhcp.tf`, confirmed
+    `terraform (opnsense)` alone went red (`terraform (terraform)` stayed
+    green, correctly isolated) at the `terraform fmt` step, then deleted the
+    branch without merging — same pattern as Milestone 2 task 8.
 
     Notes:
 
