@@ -66,7 +66,7 @@ resource "proxmox_virtual_environment_vm" "dc01" {
   disk {
     datastore_id = var.guest_datastore
     interface    = "scsi0"
-    size         = 80
+    size         = 80 # matches the template's own disk size in packer/windows-server-2025.pkr.hcl.
   }
 
   network_device {
