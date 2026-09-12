@@ -441,3 +441,34 @@ Rejected: reusing the domain administrator password — no Terraform change need
 operator of this lab will ever perform a directory restore, but it quietly merges two
 credentials that exist for unrelated reasons, which is the kind of shortcut a reviewer
 notices and asks about.
+
+### The repository stays in English throughout
+
+Why: English is the convention for infrastructure code, keeps every identifier, comment
+and error message consistent with the tools themselves, and leaves one set of documents
+to maintain rather than two that drift.
+Note: this sits deliberately alongside the German image decision above. The machines are
+German because the lab imitates a German company network; the repository is English
+because it is engineering documentation. They are answering different questions.
+Rejected: an English repository with a German README as a second front door — the
+strongest gesture toward the actual hiring audience, and cheap at one file, but it is a
+file that silently goes stale the moment the English one changes.
+Rejected: German throughout — the clearest signal for a German employer, at the cost of
+cutting off any English-reading reviewer and rewriting every design document.
+
+### The reader-facing surface is a narrative walkthrough plus an explicit limitations section
+
+Why: the repository already has reference material and operational material, and neither
+tells a story. The design documents say what the network is, the runbook says what to
+type, but nothing traces one machine from blank ISO to domain-joined client with a policy
+applied. That trace is what shows understanding rather than configuration, and it is what
+a reviewer with three minutes can actually absorb.
+The limitations section is the same argument from the other side: naming what the lab
+deliberately does not do — no high availability, no backup, no monitoring, one site,
+never applied to hardware — before a reviewer finds it reads as scope control rather than
+oversight. It pairs with the execution status section already in the README.
+Rejected: a digest of the most revealing decisions pulled to the front — cheaper, and
+`PLAN.md` is genuinely too long to skim at 29 entries, but a list of conclusions without
+the thread connecting them is less convincing than the thread.
+Rejected: tightening the README and stopping there — the fastest option, and the stale
+claims have to be fixed regardless, but it adds nothing a reader did not already have.

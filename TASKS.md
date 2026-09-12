@@ -1409,9 +1409,163 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
 ## Milestone 7: The repo reads as a finished portfolio piece
 
-<!-- Not planned yet. Runbook complete end to end, diagrams current, README honest about
-     execution status. This is the last milestone that needs no hardware — the project is
-     a complete deliverable when it lands. -->
+The last milestone that needs no hardware. When it lands the project is a complete
+deliverable: every claim in it is true, a reviewer can follow one machine from ISO to
+domain member, and what the lab does not do is stated rather than discovered.
+
+Branch this milestone per `docs/conventions.md`: one branch, one commit per task, one PR.
+
+1. [ ] Audit every document for stale claims and wrong cross-references
+   **What:** a single pass over `README.md`, `docs/*.md` and `PLAN.md` collecting
+   everything that no longer matches the repo, written up as a checklist the later tasks
+   work from.
+   **Why:** six milestones of decisions have moved underneath the early documents. The
+   Active Directory design already needed its milestone numbers corrected once, and the
+   README still describes one Packer image when there are two. A portfolio piece whose own
+   documentation contradicts itself is worse than a smaller one that does not.
+   **How:** grep for milestone numbers and check each against `TASKS.md`; grep for
+   "image" and "template" in the singular; check every layer description against what the
+   directory actually contains. Known already: the README's "each done for real rather than
+   described", its single-image wording, and its claim that Terraform clones only the three
+   Windows guests when it also creates the OPNsense VM.
+   **Accept:** a written list of every stale claim with its file and line; every milestone
+   number referenced in `docs/` matches the heading in `TASKS.md`; no item on the list is
+   left without either a fix task or a note saying why it stands.
+
+   Notes:
+
+2. [ ] Rewrite the README opening and layer index
+   **What:** the two opening paragraphs and the layer table, corrected to describe two
+   images, four VMs, and what each directory genuinely does.
+   **Why:** this is the first thing a reviewer reads, and it currently ends on "each done
+   for real rather than described" — which the execution status section four screens down
+   flatly contradicts. That contradiction is the single worst thing in the repo.
+   **How:** say what the project is and what it demonstrates without claiming it has run.
+   The execution status section is where that question gets answered, and it already
+   answers it well; the opening should not pre-empt it with a claim it then withdraws.
+   **Accept:** no sentence in the README's first screen asserts the lab has been run or
+   built; the layer table names two Packer images and lists the OPNsense VM under
+   `terraform/`; the opening and the execution status section agree.
+
+   Notes:
+
+3. [ ] Add a limitations and next-steps section to the README
+   **What:** what the lab deliberately does not do — no high availability, no clustering,
+   no backup, no monitoring, no hybrid identity, one site, never applied to hardware — and
+   the short list of what would come next.
+   **Why:** PLAN.md's "Not in scope" list holds most of this already, but it is in a file a
+   skim reader never opens. Naming the gaps on the front page before a reviewer finds them
+   reads as scope control; leaving them to be discovered reads as oversight.
+   **How:** pull from the "Not in scope" list rather than inventing a second one, so the two
+   cannot drift. Keep next steps short and honest — a second domain controller for
+   replication, and the proof run that is already Milestone 8.
+   **Accept:** every item in the section traces to a line in PLAN.md's "Not in scope" or to
+   a milestone in `TASKS.md`; the section names the never-applied status without repeating
+   the execution status table; it is under a screen long.
+
+   Notes:
+
+4. [ ] Write docs/walkthrough.md
+   **What:** one document tracing a single machine end to end — CL01 from blank ISO to a
+   domain-joined client with the logon banner applied — naming which layer does what at
+   each step and linking to the file that does it.
+   **Why:** the decision in PLAN.md makes this the reader-facing surface. The design docs
+   are reference and the runbook is operational; neither tells the story, and the story is
+   what distinguishes this from following a tutorial.
+   **How:** follow the real chain: Packer bakes the Windows 11 template, Terraform clones
+   it and pins its MAC, OPNsense hands that MAC its reserved address, `Bootstrap-CL01.ps1`
+   renames and joins it into `Computers/Workstations`, the Workstation Baseline GPO lands
+   and the banner appears. Each step gets a sentence on why it happens there and a link.
+   Write it in the same never-executed voice as the runbook.
+   **Accept:** every step names a real file in the repo and links to it; the chain has no
+   gap where a reader would ask "how did it get an address"; the document states it
+   describes an unexecuted design; it fits on roughly two screens.
+
+   Notes:
+
+5. [ ] Wire the walkthrough into the README and docs/README.md
+   **What:** the walkthrough placed first in the README's reading order, and
+   `docs/README.md` turned into a real index of the design documents rather than three
+   lines.
+   **Why:** a document nobody is pointed at may as well not exist, and the reading order is
+   currently a list of reference material with no obvious entry point for someone who does
+   not yet know what the project is.
+   **How:** walkthrough first, then the design docs, then the runbook, then PLAN.md for the
+   reasoning. Add `docs/conventions.md`, which the reading order omits entirely.
+   **Accept:** the walkthrough is the first item in the reading order; every file in `docs/`
+   appears in `docs/README.md` with a one-line description; the link checker in CI passes.
+
+   Notes:
+
+6. [ ] Add a navigable index to the PLAN.md decision log
+   **What:** a short index at the top of the decisions section linking to each entry.
+   **Why:** 31 decisions is the most valuable content in the repo and the least navigable.
+   A reviewer who wants to know why the domain is not `.local` should not have to scroll
+   through thirty entries to find out whether the question was even considered.
+   **How:** an additive index only — do not reorder, retitle or rewrite any existing entry.
+   The decision history is the point, and editing it to look tidier destroys it.
+   **Accept:** every decision heading appears in the index exactly once, in file order; no
+   existing decision entry's text changed in this commit's diff; every anchor resolves.
+
+   Notes:
+
+7. [ ] Verify the architecture diagram is current and renders on GitHub
+   **What:** the Mermaid diagram in the README and the fuller one in
+   `docs/network-diagram.md`, checked against the design and against GitHub's renderer.
+   **Why:** the diagram is the only visual this project has — there are no screenshots,
+   because nothing has run. If it does not render, the README's most valuable element is a
+   block of source code.
+   **How:** confirm both diagrams match `docs/network-design.md` after six milestones of
+   changes. Check the line breaks in node labels actually render, rather than showing a
+   literal escape, since GitHub's Mermaid version is stricter than some editors.
+   **Accept:** both diagrams render on the GitHub page with no literal escape sequences
+   visible; every host, VLAN and subnet shown matches `docs/network-design.md`.
+
+   Notes:
+
+8. [ ] Read the runbook end to end as one document
+   **What:** a continuity pass over `docs/runbook.md` — that sections 2 to 5 read as one
+   sequence, and that sections 1 and 6 are clearly marked as needing a host rather than
+   looking unfinished.
+   **Why:** the runbook was written a section at a time across four milestones, by which
+   point nobody has read it straight through. It is also the document a proof run would be
+   executed from, so a gap between sections is a real failure, not a cosmetic one.
+   **How:** read it as someone with a host and no other context. Check that each section
+   ends where the next begins, that every environment variable is introduced before use,
+   and that the two deferred sections say plainly that they wait on hardware.
+   **Accept:** no section references a variable, file or state that an earlier section did
+   not produce; sections 1 and 6 name Milestone 8 as their owner; the never-executed marker
+   is present and consistent across every section.
+
+   Notes:
+
+9. [ ] Confirm hardware.md still reads correctly with no host chosen
+   **What:** the hardware document reviewed now that buying a host is no longer the plan.
+   **Why:** it was written in Milestone 1 expecting hardware to be purchased, and it still
+   documents two NIC layouts with a note to narrow to one once a host is chosen. The proof
+   run decision changed that to rented bare metal, which makes both layouts live options
+   rather than a pending choice.
+   **How:** keep both layouts, but reframe the note so it reads as a deliberate choice left
+   open, not as an unfinished decision. Check nothing in it assumes ownership of a machine.
+   **Accept:** no sentence in `docs/hardware.md` implies a host will be bought or that a
+   decision is outstanding; both NIC layouts are presented as valid; it agrees with the
+   proof run decision in PLAN.md.
+
+   Notes:
+
+10. [ ] Final read as a stranger, with CI green
+    **What:** one pass through the whole repository in reading order, as someone who has
+    never seen it, followed by a green CI run on the milestone branch.
+    **Why:** this is the milestone's actual acceptance test. Every earlier task fixes a
+    known problem; this one is the only chance to catch what nobody thought to look for.
+    **How:** start at the README and follow the reading order without opening anything it
+    does not link to. Note every point where a question goes unanswered. Fix what is
+    cheap, and add anything expensive as a new task rather than silently leaving it.
+    **Accept:** the reading order answers what the project is, what it demonstrates, and
+    whether it has run, without the reader opening an unlinked file; CI is green on the
+    branch; any unresolved finding exists as a written task rather than an unrecorded gap.
+
+    Notes:
 
 ## Milestone 8: The lab is applied once on rented bare metal and the evidence is captured
 
