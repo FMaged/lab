@@ -817,7 +817,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
    Notes:
 
-3. [ ] Add the reservations to opnsense/dhcp.tf
+3. [x] Add the reservations to opnsense/dhcp.tf
    **What:** a Servers VLAN Kea scope with reservations and no pool, plus a CL01
    reservation in the existing Clients scope.
    **Why:** this is the half of the bootstrap decision that lives in code, and without it
@@ -828,7 +828,11 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** `terraform validate` passes in `opnsense/`; the Servers scope declares no
    pool range; every reservation's address and MAC match the two design documents exactly.
 
-   Notes:
+   Notes: reservations reference their subnet by `subnet_id`
+   (`opnsense_kea_dhcpv4_subnet.<x>.id`), confirmed from the real schema, not
+   assumed. Real fmt/validate both green. Also fixed the same stale
+   "cannot be applied" claim in the terraform-opnsense skill that
+   terraform-proxmox's already had corrected.
 
 4. [ ] Write terraform/vm-dc01.tf
    **What:** DC01 cloned from `tpl-winsrv2025-de-v1`, VMID 201, VLAN 20, pinned MAC, tags
