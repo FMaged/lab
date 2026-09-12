@@ -995,9 +995,182 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
     Notes:
 
-## Milestone 6: PowerShell brings up AD DS, DNS, DHCP, the OU structure and the GPOs
+## Milestone 6: PowerShell brings up AD DS, DNS, the OU structure and the GPOs
 
-<!-- Not planned yet. The PowerShell does not exist yet — it is written here, not reused. -->
+<!-- DHCP dropped from this heading on 2026-09-12: OPNsense owns it and Milestone 4
+     built it. The old wording came from the original project sketch. See the DHCP
+     decision in PLAN.md. -->
+
+The layer that turns three booted Windows VMs into a domain. One parameterised entry
+point per guest, driving itself across reboots, implementing `docs/ad-design.md` exactly.
+Ends when PSScriptAnalyzer is green on the whole layer — nothing can be run, so the
+analyzer and a careful read are the only evidence.
+
+Branch this milestone per `docs/conventions.md`: one branch, one commit per task, one PR.
+
+1. [ ] Fix the stale milestone numbers in docs/ad-design.md
+   **What:** the closing section refers to "Milestone 5's PowerShell" and "Milestone 6
+   must show CL01" — both written before the re-plan renumbered everything.
+   **Why:** this document is the spec the whole milestone implements, and a reader
+   following its cross-references currently lands on the Terraform milestone. It is also
+   the cheapest possible fix to make before anyone works from it.
+   **How:** PowerShell is Milestone 6 throughout; the CL01 verification belongs to the
+   same milestone, not a later one. Check no other doc carries the same drift.
+   **Accept:** no milestone number in `docs/ad-design.md` points at a milestone whose
+   heading in `TASKS.md` describes different work; a grep for "Milestone" across `docs/`
+   returns only correct references.
+
+   Notes:
+
+2. [ ] Write the shared PowerShell module
+   **What:** `powershell/SILab.psm1` — logging to a transcript, the phase marker read and
+   write, a scheduled-task register and unregister pair, and a guard that makes re-running
+   a completed phase a no-op.
+   **Why:** the reboot decision in PLAN.md puts all sequencing inside the guest, so every
+   phase needs the same state handling. Writing it once is what makes the idempotency rule
+   in AGENTS.md achievable rather than aspirational.
+   **How:** Windows PowerShell 5.1 only — no ternary, no null-coalescing, and watch the
+   file encoding trap the global `powershell` skill describes. Every state-changing
+   function gets `[CmdletBinding(SupportsShouldProcess)]`. Log to a fixed path under
+   `C:\ProgramData`, never the user profile, since phases run as SYSTEM after a reboot.
+   **Accept:** PSScriptAnalyzer clean at Error and Warning; every exported function that
+   changes state declares `SupportsShouldProcess`; re-running a phase whose marker is
+   already set returns without acting, visible by reading the guard.
+
+   Notes:
+
+3. [ ] Write the first-boot phase: hostname, static address, DNS
+   **What:** the phase that renames the guest, replaces its DHCP-reserved address with the
+   static one from `docs/network-design.md`, points DNS at DC01, and reboots.
+   **Why:** the bootstrap decision in PLAN.md is explicit that the reservation is
+   scaffolding and the running state is static — a domain controller must not need DHCP to
+   come back after a reboot. This is the phase that makes that true.
+   **How:** parameters come from Terraform's entry point invocation, not from a file baked
+   into the image. DC01 points DNS at itself once promoted; before promotion it needs a
+   resolver that exists, so set that order deliberately and comment why.
+   **Accept:** PSScriptAnalyzer clean; the static address written matches the address
+   table for that host; no address is hardcoded in a way that contradicts
+   `docs/network-design.md`; the phase marker advances and a reboot is requested.
+
+   Notes:
+
+4. [ ] Write the domain controller promotion phase
+   **What:** the phase that installs AD DS, creates the forest `ad.silab.internal` with
+   NetBIOS `SILAB` at the 2025 functional level, renames the default site, and reboots.
+   **Why:** this is the centre of the whole project — every later task, and the client
+   proof in task 7, depends on this forest existing exactly as `docs/ad-design.md`
+   specifies.
+   **How:** `Install-ADDSForest` reboots on its own, so the phase marker must be written
+   before the call, not after, or the resume lands in the wrong phase. The Safe Mode
+   recovery password arrives as a `SecureString` parameter from Terraform, never a
+   literal. Site rename is a separate, idempotent step.
+   **Accept:** PSScriptAnalyzer clean; domain name, NetBIOS name, functional level and
+   site name all match `docs/ad-design.md` exactly; the recovery password parameter is
+   `SecureString` and appears in no log line; the marker is written before the promotion
+   call.
+
+   Notes:
+
+5. [ ] Write the OU tree and the two groups
+   **What:** the `SILAB` top-level OU with `Computers/Servers`, `Computers/Workstations`,
+   `Users`, `Groups` and `Service Accounts` beneath it, plus `SILAB-Admins` and
+   `SILAB-Helpdesk` as global security groups.
+   **Why:** `docs/ad-design.md` explains the shape as deliberate — the split under
+   `Computers` is what makes the two baseline GPOs scopable at all, so task 6 cannot work
+   without it.
+   **How:** create parents before children and make each creation idempotent, since a
+   retried phase will find some of the tree already present. Do not touch the built-in
+   `Domain Controllers` OU — the design says DC01 never moves out of it.
+   **Accept:** PSScriptAnalyzer clean; the created tree matches the diagram in
+   `docs/ad-design.md` node for node; re-running creates nothing and errors on nothing;
+   no code moves DC01's computer object.
+
+   Notes:
+
+6. [ ] Write the three baseline GPOs
+   **What:** the domain password and lockout policy at the root, the Workstation Baseline
+   linked to `Computers/Workstations`, and the Server Baseline linked to
+   `Computers/Servers`.
+   **Why:** the GPOs are the visible output of the whole directory design, and the
+   Workstation Baseline's logon banner is the single screenshot that proves a policy
+   actually applied rather than merely being linked.
+   **How:** one function per GPO, each creating the object, setting its values and linking
+   it. Settings come from the table in `docs/ad-design.md` and nowhere else. Linking is
+   separate from creating so a re-run can repair a missing link without rebuilding the
+   policy.
+
+   6.1. [ ] Password and lockout policy at the domain root
+   6.2. [ ] Workstation Baseline, including the logon banner
+   6.3. [ ] Server Baseline
+
+   **Accept:** PSScriptAnalyzer clean; every setting traces to a row in the GPO table in
+   `docs/ad-design.md`; each GPO is linked to exactly the container that table names;
+   re-running relinks nothing twice and creates no duplicate policy.
+
+   Notes:
+
+7. [ ] Write the domain join phase for SRV01 and CL01
+   **What:** the phase that joins a member to `ad.silab.internal` and places its computer
+   object in `Computers/Servers` or `Computers/Workstations` according to its role.
+   **Why:** `docs/ad-design.md` requires SRV01 to land in `Computers/Servers` and CL01 in
+   `Computers/Workstations`, and Terraform only creates VMs — it knows nothing about OUs.
+   Placement at join time is also what puts each machine in scope of the right baseline
+   GPO immediately.
+   **How:** join directly into the target OU rather than joining and then moving, so the
+   machine never sits briefly in the default `Computers` container out of GPO scope. The
+   join credential is a parameter, never a literal. Waiting for DC01 to answer is part of
+   this phase, since a member booting first is a normal race.
+   **Accept:** PSScriptAnalyzer clean; the target OU is derived from the role parameter
+   and matches `docs/ad-design.md`; the join credential is a `PSCredential` parameter and
+   appears in no log line; re-running on an already-joined machine is a no-op.
+
+   Notes:
+
+8. [ ] Write the health check script
+   **What:** `powershell/Test-SILab.ps1` — a read-only check that the forest, OU tree,
+   groups, GPO links and both member joins are in the state the design documents describe,
+   printing a pass or fail line per item.
+   **Why:** this is the script a proof run would actually be judged by, and the only thing
+   in the repo that states what "working" means in checkable terms rather than prose.
+   **How:** read-only throughout — no `Set-`, no `New-`, nothing that changes state, so it
+   is safe to run repeatedly on a live domain. One check per row of the design tables. Exit
+   non-zero if any check fails, so it can gate a runbook step.
+   **Accept:** PSScriptAnalyzer clean; the script contains no state-changing cmdlet; every
+   check maps to a specific row in `docs/ad-design.md` or `docs/network-design.md`; it
+   exits non-zero when any check fails.
+
+   Notes:
+
+9. [ ] Complete runbook sections 4 and 5
+   **What:** the remaining half of the domain controller and member sections — running the
+   entry point, what each reboot looks like, how to tell a phase resumed correctly, and the
+   health check as the closing step.
+   **Why:** AGENTS.md makes a layer unfinished until its runbook section is written, and the
+   multi-phase reboot behaviour is exactly the thing that looks like a hang to someone
+   running it for the first time.
+   **How:** fill in whatever Milestone 5 task 9 left as placeholders. Say plainly that a
+   guest will reboot more than once and appear unreachable in between, and where the
+   transcript log lives so a stuck phase can be diagnosed.
+   **Accept:** sections 4 and 5 carry concrete commands, name the log path, describe the
+   reboot sequence, end with the health check, and carry the never-executed marker the
+   other sections use.
+
+   Notes:
+
+10. [ ] Get PSScriptAnalyzer green and prove it still fails
+    **What:** the whole `powershell/` layer clean at Error and Warning in CI, plus a
+    throwaway check that a real violation still turns the job red.
+    **Why:** this milestone is the first code in the repo with no validator stronger than a
+    linter, and per the CI decision in PLAN.md static analysis is the only evidence it is
+    sound. A analyzer that is silently skipping files looks exactly like a passing one —
+    which Milestone 2 already had to fix once.
+    **How:** run the command from AGENTS.md. Then add a deliberate violation on a scratch
+    commit, confirm red, revert. Same method as Milestone 2 task 8.
+    **Accept:** the PowerShell job is green on the milestone branch with every script
+    analysed; a deliberately introduced violation produces a red run; the scratch commit is
+    not merged.
+
+    Notes:
 
 ## Milestone 7: The repo reads as a finished portfolio piece
 
