@@ -41,6 +41,43 @@ status decision below.
 
 ## Decisions
 
+<!-- Index generated from the headings below. Decisions are never reordered or
+     retitled: the history is the point. Append new ones at the end and add a row. -->
+
+| # | Decision |
+| --- | --- |
+| 1 | [Topology is domain controller, member server, client and firewall](#topology-is-domain-controller-member-server-client-and-firewall) |
+| 2 | [Active Directory forest root is ad.silab.internal, NetBIOS SILAB](#active-directory-forest-root-is-adsilabinternal-netbios-silab) |
+| 3 | [Bake the image with Packer but do not sysprep it](#bake-the-image-with-packer-but-do-not-sysprep-it) |
+| 4 | [Terraform uses the bpg/proxmox provider](#terraform-uses-the-bpgproxmox-provider) |
+| 5 | [OS configuration is Windows PowerShell 5.1, not PowerShell 7](#os-configuration-is-windows-powershell-51-not-powershell-7) |
+| 6 | [OPNsense as the lab router](#opnsense-as-the-lab-router) |
+| 7 | [Documentation is a deliverable, not an afterthought](#documentation-is-a-deliverable-not-an-afterthought) |
+| 8 | [One repository for all four layers](#one-repository-for-all-four-layers) |
+| 9 | [OPNsense is configured via the browningluke/opnsense Terraform provider](#opnsense-is-configured-via-the-browninglukeopnsense-terraform-provider) |
+| 10 | [Secrets are env vars + gitignored local var files, handed to PowerShell through Terraform](#secrets-are-env-vars--gitignored-local-var-files-handed-to-powershell-through-terraform) |
+| 11 | [The lab is authored and validated now, and executed only if a host appears](#the-lab-is-authored-and-validated-now-and-executed-only-if-a-host-appears) |
+| 12 | [CI is the test harness, and it validates but never applies](#ci-is-the-test-harness-and-it-validates-but-never-applies) |
+| 13 | [The repository is public on GitHub](#the-repository-is-public-on-github) |
+| 14 | [Execution status is stated plainly in the README](#execution-status-is-stated-plainly-in-the-readme) |
+| 15 | [The proof run is rented hourly bare metal, not purchased hardware](#the-proof-run-is-rented-hourly-bare-metal-not-purchased-hardware) |
+| 16 | [Two Packer templates, Windows Server 2025 and Windows 11](#two-packer-templates-windows-server-2025-and-windows-11) |
+| 17 | [Both images are built in German (de-DE) throughout](#both-images-are-built-in-german-de-de-throughout) |
+| 18 | [Windows Server uses Desktop Experience, not Server Core](#windows-server-uses-desktop-experience-not-server-core) |
+| 19 | [Windows 11 gets its local account directly in the answer file, not via a BypassNRO trick](#windows-11-gets-its-local-account-directly-in-the-answer-file-not-via-a-bypassnro-trick) |
+| 20 | [The OPNsense bootstrap is manual, and the boundary is stated in the runbook](#the-opnsense-bootstrap-is-manual-and-the-boundary-is-stated-in-the-runbook) |
+| 21 | [The OPNsense VM is defined in terraform/ with every other VM](#the-opnsense-vm-is-defined-in-terraform-with-every-other-vm) |
+| 22 | [One milestone is one branch, one task is one commit, one PR per milestone](#one-milestone-is-one-branch-one-task-is-one-commit-one-pr-per-milestone) |
+| 23 | [Inter-VLAN traffic is least privilege, with a reason on every rule](#inter-vlan-traffic-is-least-privilege-with-a-reason-on-every-rule) |
+| 24 | [The manual/code boundary is interface assignment and addressing, not VLANs](#the-manualcode-boundary-is-interface-assignment-and-addressing-not-vlans) |
+| 25 | [Guests reach their first address by DHCP reservation, then PowerShell makes it static](#guests-reach-their-first-address-by-dhcp-reservation-then-powershell-makes-it-static) |
+| 26 | [DHCP stays with OPNsense; PowerShell never runs a DHCP server](#dhcp-stays-with-opnsense-powershell-never-runs-a-dhcp-server) |
+| 27 | [The guest drives itself across reboots; Terraform fires once and stops](#the-guest-drives-itself-across-reboots-terraform-fires-once-and-stops) |
+| 28 | [Credentials never outlive the phase that needs them](#credentials-never-outlive-the-phase-that-needs-them) |
+| 29 | [The Safe Mode recovery password is its own Terraform variable](#the-safe-mode-recovery-password-is-its-own-terraform-variable) |
+| 30 | [The repository stays in English throughout](#the-repository-stays-in-english-throughout) |
+| 31 | [The reader-facing surface is a narrative walkthrough plus an explicit limitations section](#the-reader-facing-surface-is-a-narrative-walkthrough-plus-an-explicit-limitations-section) |
+
 ### Topology is domain controller, member server, client and firewall
 
 Why: the smallest set that proves the whole story end to end — a routed network with
