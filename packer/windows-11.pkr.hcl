@@ -13,9 +13,9 @@ source "proxmox-iso" "windows_11" {
   tags                 = "lab;packer;win11"
 
   # -- Hardware shape --
-  # Same shape as windows-server-2025.pkr.hcl, plus TPM 2.0 and Secure Boot, which
-  # Windows 11 Setup enforces and Windows Server does not. Real virtual hardware,
-  # not a bypass — see the Windows 11 SPIKE decision in PLAN.md.
+  # Same shape as windows-server-2025.pkr.hcl, plus TPM 2.0 and Secure Boot,
+  # which Windows 11 enforces and Server doesn't — real hardware, not a bypass
+  # (PLAN.md Windows 11 SPIKE decision).
   machine = "q35"
   bios    = "ovmf"
   cores   = 4

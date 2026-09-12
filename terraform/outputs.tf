@@ -1,7 +1,6 @@
-# Addresses here are literals matching docs/network-design.md, not resource
-# attributes — none of these VMs get their address from a Terraform-managed
-# ip_config block, so there is nothing on the resource itself to read it from.
-# No secrets: none of these four guests need one to be identified by.
+# Addresses are literals matching docs/network-design.md, not read from a
+# Terraform-managed ip_config block (none of these guests have one). None of
+# these four outputs need `sensitive = true` either — no credential in them.
 
 output "opnsense" {
   value = {

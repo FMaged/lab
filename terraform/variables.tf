@@ -46,9 +46,9 @@ variable "proxmox_bridge_trunk" {
   default     = "vmbr1"
 }
 
-# No default on either — genuinely required, unlike the placeholders above.
-# terraform validate (unlike packer validate) does not need one; a real value
-# is only needed at apply, which nothing here can do yet anyway.
+# No default on any of these three — genuinely required, unlike the placeholders
+# above. terraform validate doesn't need one; apply does, and nothing here can
+# apply yet anyway.
 
 variable "local_admin_password" {
   type        = string

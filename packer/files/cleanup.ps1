@@ -1,5 +1,5 @@
-# Final cleanup pass. Deliberately does NOT sysprep or otherwise generalize the
-# image — see the no-sysprep decision in PLAN.md. Only removes build-time debris.
+# Deliberately does NOT sysprep or generalize the image (PLAN.md no-sysprep
+# decision) — only removes build-time debris.
 $ErrorActionPreference = 'Stop'
 
 Write-Host 'Clearing the Windows Update download cache...'
@@ -16,8 +16,7 @@ Get-WinEvent -ListLog * -ErrorAction SilentlyContinue | ForEach-Object {
     try {
         [System.Diagnostics.Eventing.Reader.EventLogSession]::GlobalSession.ClearLog($_.LogName)
     } catch {
-        # Some logs (Security, some Analytic/Debug channels) refuse to clear this
-        # way — not worth failing the build over.
+        # Security and some Analytic/Debug logs refuse to clear this way — not worth failing the build over.
     }
 }
 

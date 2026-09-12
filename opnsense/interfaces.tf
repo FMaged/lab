@@ -1,6 +1,5 @@
-# The VLAN devices themselves. Creating the device is code; assigning each one
-# to a logical interface and giving it a static address is not — see the
-# manual/code boundary decision in PLAN.md and runbook section 3a step 6.
+# Creates the VLAN devices only — assigning each to a logical interface with a
+# static address is manual (PLAN.md manual/code boundary; runbook 3a step 6).
 resource "opnsense_interfaces_vlan" "management" {
   parent      = var.trunk_parent_interface
   tag         = var.network_vlan_management

@@ -1,7 +1,5 @@
-# Evaluation order matters in a filter chain — resources here are declared in
-# the same order OPNsense evaluates them (ascending `sequence`), matching the
-# rule table in docs/network-design.md exactly. Nothing here may contradict
-# that table; if a rule needs to change, change the table first.
+# Declared in OPNsense's evaluation order (ascending `sequence`), matching
+# docs/network-design.md exactly — change the table first, not this file.
 
 locals {
   management_subnet = "10.10.${var.network_vlan_management}.0/24"
@@ -26,9 +24,8 @@ resource "opnsense_firewall_alias" "lab_networks" {
 }
 
 # -- Inter-VLAN: Clients to DC01, exactly what a domain member needs --
-# DNS and Kerberos each need a TCP and a UDP rule; LDAP/SMB are TCP-only, NTP is
-# UDP-only. Management is not a destination anywhere in this file, by omission
-# — default-deny handles the rest, per the decision in PLAN.md.
+# DNS/Kerberos need TCP+UDP, LDAP/SMB are TCP-only, NTP is UDP-only. Management
+# is never a destination here — default-deny handles it (PLAN.md).
 
 resource "opnsense_firewall_filter" "clients_to_dc01_dns_tcp" {
   sequence    = 100
@@ -122,8 +119,8 @@ resource "opnsense_firewall_filter" "clients_to_dc01_ntp" {
 }
 
 # -- Outbound to the internet, one rule per VLAN --
-# Clients get no direct outbound DNS/NTP rule — see the DNS section in
-# docs/network-design.md; both go through DC01 instead.
+# Clients get no outbound DNS/NTP rule — both go through DC01 instead (DNS
+# section, docs/network-design.md).
 
 resource "opnsense_firewall_filter" "management_outbound_web" {
   sequence    = 200

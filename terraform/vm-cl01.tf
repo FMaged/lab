@@ -1,5 +1,4 @@
-# CL01 clones the Windows 11 template, not the Server one — a separate lookup
-# since it's a different template.
+# A separate lookup from vm-dc01.tf's — CL01 clones the Windows 11 template.
 data "proxmox_virtual_environment_vms" "win11_template" {
   filter {
     name   = "name"
@@ -10,9 +9,7 @@ data "proxmox_virtual_environment_vms" "win11_template" {
     values = [true]
   }
 
-  # Without this, a missing or renamed template fails on vms[0] with an
-  # index-out-of-range error that names neither the template nor the cause —
-  # at the first real apply, when the operator has the least context.
+  # See the comment in vm-dc01.tf.
   lifecycle {
     postcondition {
       condition     = length(self.vms) == 1
@@ -32,17 +29,13 @@ resource "proxmox_virtual_environment_vm" "cl01" {
     full  = true
   }
 
-  # Restated explicitly, not relied on as clone inheritance — see the comment
-  # in vm-dc01.tf. This one matters more than for the Server guests: if TPM or
-  # Secure Boot silently dropped on clone, Windows 11 fails to boot outright.
-  # Matches packer/windows-11.pkr.hcl's source block exactly.
+  # See the comment in vm-dc01.tf — matters more here: if TPM/Secure Boot
+  # silently dropped on clone, Windows 11 fails to boot outright. Matches
+  # packer/windows-11.pkr.hcl's source block exactly.
   machine = "q35"
   bios    = "ovmf"
 
-  # "4m" is required for Secure Boot and the provider defaults to "2m";
-  # pre_enrolled_keys defaults to false. Both per the bpg/proxmox 0.112.0 docs for
-  # this resource. Neither is inherited from the template, so both are set here
-  # explicitly on every UEFI guest.
+  # efi_disk: see the comment in vm-dc01.tf.
   efi_disk {
     datastore_id      = var.guest_datastore
     type              = "4m"
@@ -74,9 +67,8 @@ resource "proxmox_virtual_environment_vm" "cl01" {
     size         = 64 # matches the template's own disk size in packer/windows-11.pkr.hcl.
   }
 
-  # No mac-to-static mapping the way DC01/SRV01 get one — CL01 stays on DHCP
-  # permanently (see docs/network-design.md), so the pinned MAC only exists to
-  # key its DHCP reservation, never to be replaced by a static address later.
+  # CL01 stays on DHCP permanently (docs/network-design.md) — unlike DC01/SRV01,
+  # this MAC only keys the DHCP reservation, never becomes a static address.
   network_device {
     bridge      = var.proxmox_bridge_trunk
     vlan_id     = var.network_vlan_clients
@@ -100,7 +92,6 @@ resource "proxmox_virtual_environment_vm" "cl01" {
     destination = "C:/lab-provisioning"
   }
 
-  # Runs powershell/Bootstrap-CL01.ps1, which takes it from here.
   provisioner "remote-exec" {
     inline = [
       "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-CL01.ps1 -LocalAdminPassword '${local.ps_local_admin_password}' -DomainAdminPassword '${local.ps_domain_admin_password}'",

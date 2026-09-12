@@ -1,8 +1,7 @@
-# Mirrors vm-dc01.tf exactly apart from name, vm_id, mac_address and the role
-# tag — the two guests share every structural choice, and duplicating four
-# lines is simpler than a module for two resources. See the
-# simplest-thing-that-works rule in PLAN.md. The template lookup data source
-# lives in vm-dc01.tf; both files share this root, so it needs declaring once.
+# Mirrors vm-dc01.tf apart from name, vm_id, mac_address and role tag —
+# duplicating four lines is simpler than a module for two resources (PLAN.md
+# simplest-thing-that-works). The template lookup data source referenced below
+# lives in vm-dc01.tf, shared by both files in this root.
 resource "proxmox_virtual_environment_vm" "srv01" {
   name      = "SRV01"
   node_name = var.proxmox_node
@@ -18,10 +17,7 @@ resource "proxmox_virtual_environment_vm" "srv01" {
   machine = "q35"
   bios    = "ovmf"
 
-  # "4m" is required for Secure Boot and the provider defaults to "2m";
-  # pre_enrolled_keys defaults to false. Both per the bpg/proxmox 0.112.0 docs for
-  # this resource. Neither is inherited from the template, so both are set here
-  # explicitly on every UEFI guest.
+  # efi_disk: see the comment in vm-dc01.tf.
   efi_disk {
     datastore_id      = var.guest_datastore
     type              = "4m"
@@ -68,7 +64,6 @@ resource "proxmox_virtual_environment_vm" "srv01" {
     destination = "C:/lab-provisioning"
   }
 
-  # Runs powershell/Bootstrap-SRV01.ps1, which takes it from here.
   provisioner "remote-exec" {
     inline = [
       "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-SRV01.ps1 -LocalAdminPassword '${local.ps_local_admin_password}' -DomainAdminPassword '${local.ps_domain_admin_password}'",

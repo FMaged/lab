@@ -1,6 +1,5 @@
-# Looked up by name, not a hardcoded VMID — bumping the template to -v2 is then
-# a one-line change here, not a search-and-replace across every guest that
-# clones it. Shared with vm-srv01.tf, which clones the same template.
+# Looked up by name, not a hardcoded VMID — bumping to -v2 is then a one-line
+# change here, not a search-and-replace. Shared with vm-srv01.tf.
 data "proxmox_virtual_environment_vms" "winsrv2025_template" {
   filter {
     name   = "name"
@@ -11,9 +10,8 @@ data "proxmox_virtual_environment_vms" "winsrv2025_template" {
     values = [true]
   }
 
-  # Without this, a missing or renamed template fails on vms[0] with an
-  # index-out-of-range error that names neither the template nor the cause —
-  # at the first real apply, when the operator has the least context.
+  # Without this, a missing/renamed template fails on vms[0] with an
+  # index-out-of-range error naming neither the template nor the cause.
   lifecycle {
     postcondition {
       condition     = length(self.vms) == 1
@@ -34,17 +32,15 @@ resource "proxmox_virtual_environment_vm" "dc01" {
   }
 
   # Restated explicitly rather than relied on as clone inheritance — the
-  # provider's own clone guide is not fully specific about which fields
-  # inherit and which fall back to schema defaults, and a documented issue
-  # exists where a full clone did not carry over the source's full config.
-  # Matches packer/windows-server-2025.pkr.hcl's source block exactly.
+  # provider's clone guide isn't fully specific about what inherits, and a
+  # documented issue exists where a full clone dropped source config. Matches
+  # packer/windows-server-2025.pkr.hcl's source block exactly.
   machine = "q35"
   bios    = "ovmf"
 
-  # "4m" is required for Secure Boot and the provider defaults to "2m";
-  # pre_enrolled_keys defaults to false. Both per the bpg/proxmox 0.112.0 docs for
-  # this resource. Neither is inherited from the template, so both are set here
-  # explicitly on every UEFI guest.
+  # "4m" is required for Secure Boot (provider default is "2m"); pre_enrolled_keys
+  # defaults to false. Neither inherits from the template, so both are set
+  # explicitly here on every UEFI guest (bpg/proxmox 0.112.0 docs).
   efi_disk {
     datastore_id      = var.guest_datastore
     type              = "4m"
@@ -75,15 +71,14 @@ resource "proxmox_virtual_environment_vm" "dc01" {
     mac_address = "02:00:00:00:00:C9" # docs/conventions.md — VMID 201.
   }
 
-  # Terraform's last act for this guest: bring it up, then hand off to
-  # powershell/ — never AD commands inline here, per the terraform-proxmox
-  # skill. Host is the DHCP-reservation address (opnsense/dhcp.tf task 3) — the
-  # only address DC01 has until its own first-boot script makes it static.
+  # Terraform's last act: bring the guest up, then hand off to powershell/
+  # (never AD commands inline — terraform-proxmox skill). Host is DC01's
+  # DHCP-reservation address, its only address until first boot makes it
+  # static (opnsense/dhcp.tf task 3).
   #
-  # https = false with use_ntlm = true: HTTPS would need a certificate the
-  # template does not carry, but NTLM encrypts the message payload over the same
-  # port 5985. Without it the administrator password crosses the wire base64
-  # encoded and not encrypted. Setting only one of the two is the mistake.
+  # https=false + use_ntlm=true: the template has no cert for HTTPS, but NTLM
+  # still encrypts the payload on port 5985 — setting only one of the two would
+  # send the password across base64-encoded but unencrypted.
   connection {
     type     = "winrm"
     host     = "10.10.20.10"
@@ -99,9 +94,8 @@ resource "proxmox_virtual_environment_vm" "dc01" {
     destination = "C:/lab-provisioning"
   }
 
-  # One entry point, no chain of inline AD commands, per the skill.
   # SafeModeAdminPassword is DC01-only — SRV01/CL01 have no forest to
-  # recover, so neither of their invocations takes this argument.
+  # recover, so neither invocation takes this argument.
   provisioner "remote-exec" {
     inline = [
       "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-DC01.ps1 -LocalAdminPassword '${local.ps_local_admin_password}' -DomainAdminPassword '${local.ps_domain_admin_password}' -SafeModeAdminPassword '${local.ps_dsrm_recovery_password}'",

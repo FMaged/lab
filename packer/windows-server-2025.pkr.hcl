@@ -46,10 +46,9 @@ source "proxmox-iso" "windows_server_2025" {
     iso_storage_pool = var.iso_datastore
   }
 
-  # Generated on the fly from the answer file, and the real VirtIO ISO already on
-  # the datastore — two separate CD-ROMs. See autounattend-server.xml's header for
-  # why the driver path inside it hedges across drive letters instead of assuming
-  # a fixed one.
+  # Two separate CD-ROMs: the answer file generated on the fly, and the VirtIO
+  # ISO already on the datastore. See autounattend-server.xml's header for why
+  # its driver path hedges across drive letters instead of assuming one.
   additional_iso_files {
     cd_files         = ["files/autounattend-server.xml"]
     cd_label         = "unattend"
@@ -70,10 +69,9 @@ source "proxmox-iso" "windows_server_2025" {
   boot_wait    = "5s"
 
   # -- Communicator --
-  # Password matches autounattend-server.xml's bootstrap AdministratorPassword
-  # exactly — it is not the real, sensitive local_admin_password. Generous timeout
-  # because a German ISO applying Windows Update is slow, and there is no host yet
-  # to have actually timed it against.
+  # Password matches autounattend-server.xml's bootstrap AdministratorPassword —
+  # not the real, sensitive local_admin_password. Generous timeout since a German
+  # ISO applying Windows Update is slow, with no host yet to have timed it against.
   communicator   = "winrm"
   winrm_username = "Administrator"
   winrm_password = "Pa$$w0rd-PackerBuild!"

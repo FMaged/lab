@@ -99,8 +99,7 @@ foreach ($groupName in 'SILAB-Admins', 'SILAB-Helpdesk') {
     }
 }
 
-# Baseline GPOs - docs/ad-design.md: each exists and is linked to exactly the
-# container that table names.
+# Baseline GPOs - docs/ad-design.md: each exists, linked to the container that table names.
 $gpoChecks = @(
     @{ Name = 'Domain Password & Lockout Policy'; Target = $domainDN },
     @{ Name = 'Workstation Baseline'; Target = $ouPaths['SILAB/Computers/Workstations'] },

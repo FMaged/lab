@@ -1,7 +1,5 @@
-# Rotates the build-time bootstrap password (set by the answer file) to the real
-# local admin password. Runs last, after every other provisioner that needs
-# WinRM has already run — see the answer files' headers for why rotating it any
-# earlier risks breaking Packer's own WinRM session for the rest of the build.
+# Must run last — WinRM authenticates with the bootstrap password, so rotating
+# it earlier breaks every later provisioner's connection.
 $ErrorActionPreference = 'Stop'
 
 if (-not $env:ADMIN_PASSWORD) {

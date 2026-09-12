@@ -1,6 +1,5 @@
-# One build block, both sources — the two templates are a matched pair (see the
-# packer-windows skill), so they run the same provisioner chain instead of two
-# near-identical build blocks that would drift apart over time.
+# One build block, both sources — a matched pair (packer-windows skill) that runs
+# the same provisioner chain instead of two blocks that would drift apart.
 build {
   name = "windows-templates"
   sources = [
@@ -28,8 +27,7 @@ build {
     script = "files/cleanup.ps1"
   }
 
-  # 4. Rotate the bootstrap password to the real one. Must run last — see
-  # rotate-admin-password.ps1 and the answer files' headers for why.
+  # 4. Rotate the bootstrap password to the real one — must run last (see rotate-admin-password.ps1).
   provisioner "powershell" {
     script = "files/rotate-admin-password.ps1"
     environment_vars = [

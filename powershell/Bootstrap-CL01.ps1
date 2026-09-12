@@ -1,12 +1,9 @@
 #Requires -Version 5.1
 [CmdletBinding()]
-# Both parameters arrive as plain strings because Terraform passes command-line
-# arguments and this script cannot receive a SecureString directly (see the
-# credential decision in PLAN.md). LocalAdminPassword is unused for the whole
-# script - it only ever authenticates Terraform's own WinRM connection - but
-# is declared anyway because every guest's Bootstrap script takes the same
-# fixed parameters (AGENTS.md). DomainAdminPassword is used by the join phase,
-# below.
+# Both arrive as plain strings - Terraform passes CLI args, no SecureString
+# (PLAN.md credential decision). LocalAdminPassword is unused here (every
+# guest's script takes the same fixed parameters, AGENTS.md); DomainAdminPassword
+# is used by the join phase below.
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'LocalAdminPassword', Justification = 'Terraform passes this as a plain command-line argument; see the credential decision in PLAN.md.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'DomainAdminPassword', Justification = 'Terraform passes this as a plain command-line argument; see the credential decision in PLAN.md.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '', Justification = 'The domain admin password arrives as a plain command-line argument and is converted to a SecureString on first use; see the credential decision in PLAN.md.')]
@@ -65,9 +62,8 @@ function Wait-SILabDomainController {
 Start-SILabTranscript -ScriptName 'Bootstrap-CL01'
 
 try {
-    # The join marker is written before Add-Computer -Restart, so a failed join
-    # leaves phase 1 marked complete on an unjoined machine. Catch that rather
-    # than tidying up and exiting zero.
+    # Marker is written before Add-Computer -Restart, so a failed join leaves
+    # phase 1 marked complete on an unjoined machine - this catches that.
     Assert-SILabPhaseEffect -Number 1 -Name 'DomainJoin' -Test {
         (Get-CimInstance -ClassName Win32_ComputerSystem).PartOfDomain
     }
@@ -78,21 +74,18 @@ try {
         Wait-SILabDomainController
 
         $securePassword = ConvertTo-SecureString -String $DomainAdminPassword -AsPlainText -Force
-        # Qualified as a UPN, built from the domain name already defined above
-        # rather than a second literal. A bare 'Administrator' can resolve to the
-        # machine's local account, which on an unjoined machine is exactly the
-        # wrong one and fails without saying why.
+        # UPN built from the domain name defined above, not a second literal - a
+        # bare 'Administrator' can resolve to the local account instead, which
+        # fails without saying why on an unjoined machine.
         $credential = New-Object -TypeName System.Management.Automation.PSCredential `
             -ArgumentList "Administrator@$($script:ForestDomainName)", $securePassword
 
-        # Written before the call, not after: Add-Computer -Restart reboots on
-        # its own, so the resume must land past this phase, not repeat it.
+        # Written before the call - Add-Computer -Restart reboots on its own, so resume must land past this phase.
         Set-SILabPhase -Number 1 -Name 'DomainJoin'
         Register-SILabResumeTask -TaskName $script:ResumeTaskName -ScriptPath $PSCommandPath
 
-        # -NewName joins and renames in one supported operation, landing the
-        # computer object directly in Computers/Workstations rather than the
-        # default container and a later move.
+        # -NewName joins and renames in one operation, landing the computer object
+        # directly in Computers/Workstations instead of the default container.
         Add-Computer -NewName 'CL01' -DomainName $script:ForestDomainName -Credential $credential `
             -OUPath $script:TargetOU -Restart -Force -Confirm:$false
 

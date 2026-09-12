@@ -1,9 +1,8 @@
 variable "proxmox_url" {
   type        = string
   description = "Proxmox API URL, e.g. https://proxmox.example.internal:8006/api2/json"
-  # Placeholder, not a real endpoint — packer validate requires this non-empty
-  # (an empty string fails its own "must be specified" check), and there is no
-  # host to point it at yet regardless. Matches example.pkrvars.hcl.
+  # Placeholder, not real — packer validate requires this non-empty, and
+  # there's no host to point it at yet regardless. Matches example.pkrvars.hcl.
   default = "https://proxmox.example.internal:8006/api2/json"
 }
 

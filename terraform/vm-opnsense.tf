@@ -1,7 +1,6 @@
-# The firewall VM. Boots the OPNsense installer ISO rather than cloning a
-# template — there is no Packer image for it, per the packer-windows skill.
-# Bootstrapped by hand after this VM exists; see the bootstrap decision in
-# PLAN.md and runbook section 3a.
+# Boots the OPNsense installer ISO rather than cloning a template — there is no
+# Packer image for it (packer-windows skill). Bootstrapped by hand after this
+# VM exists (PLAN.md, runbook 3a).
 resource "proxmox_virtual_environment_vm" "opnsense" {
   name      = "opnsense"
   node_name = var.proxmox_node
@@ -42,11 +41,10 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
     bridge = var.proxmox_bridge_wan
   }
 
-  # The VLAN trunk. Deliberately no vlan_id — this carries VLANs 10, 20 and 30
-  # tagged, so OPNsense itself does the tagging/untagging on its side. This is
-  # the one documented exception in the terraform-proxmox skill to "every
-  # network_device gets an explicit vlan_id." Do not add one here, and do not
-  # treat this as a precedent for any other guest.
+  # The VLAN trunk — deliberately no vlan_id, since OPNsense itself tags/untags
+  # VLANs 10/20/30 on its side. The one documented exception in the
+  # terraform-proxmox skill to "every network_device gets an explicit vlan_id" —
+  # not a precedent for any other guest.
   network_device {
     bridge = var.proxmox_bridge_trunk
   }

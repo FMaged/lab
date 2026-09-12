@@ -1,6 +1,5 @@
-# Installs the QEMU guest agent and the rest of the VirtIO driver set from the ISO
-# the source block already attached (see additional_iso_files). Finds the CD-ROM
-# drive dynamically rather than assuming a letter, for the same reason the answer
+# Driver ISO comes from the source block's additional_iso_files. Finds the
+# CD-ROM dynamically rather than assuming a letter — same reason the answer
 # files hedge their driver paths across D:/E:/F:.
 $ErrorActionPreference = 'Stop'
 
@@ -16,11 +15,10 @@ if (-not $installer) {
 
 Write-Host "Installing guest tools from $installer"
 
-# -PassThru so the exit code can be checked. A native installer does not throw and
-# does not set $LASTEXITCODE through Start-Process, so without this a failed install
-# is silent — and the first symptom would be Terraform hanging until timeout on
-# `agent { enabled = true }`, waiting for a guest agent that was never installed.
-# 3010 is "success, reboot required", which is expected with /norestart.
+# -PassThru catches the exit code — a native installer doesn't set $LASTEXITCODE
+# via Start-Process, so a failed install would otherwise be silent (and the first
+# symptom would be Terraform hanging on `agent { enabled = true }`). 3010 means
+# success, reboot required, expected with /norestart.
 $process = Start-Process -FilePath $installer -ArgumentList '/install', '/quiet', '/norestart' `
     -Wait -NoNewWindow -PassThru
 

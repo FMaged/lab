@@ -1,7 +1,5 @@
-# Copy to packer.auto.pkrvars.hcl (gitignored) and adjust if your node, datastores
-# or ISO filenames differ. No credentials here — the Proxmox token and the local
-# admin password are PKR_VAR_* entries in the root .env. See example.env and the
-# secrets decision in PLAN.md.
+# Copy to packer.auto.pkrvars.hcl (gitignored) and adjust node/datastore/ISO names.
+# Credentials go in .env as PKR_VAR_* entries instead — see example.env, PLAN.md.
 
 proxmox_node = "pve"
 
