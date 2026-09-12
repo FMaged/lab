@@ -45,4 +45,26 @@ resource "proxmox_virtual_environment_vm" "srv01" {
     vlan_id     = var.network_vlan_servers
     mac_address = "02:00:00:00:00:CA" # docs/conventions.md — VMID 202.
   }
+
+  # See the comment in vm-dc01.tf. Host is SRV01's DHCP-reservation address.
+  connection {
+    type     = "winrm"
+    host     = "10.10.20.11"
+    user     = "Administrator"
+    password = var.local_admin_password
+    https    = false
+    timeout  = "10m"
+  }
+
+  provisioner "file" {
+    source      = "../powershell"
+    destination = "C:/lab-provisioning"
+  }
+
+  # powershell/Bootstrap-SRV01.ps1 does not exist yet — Milestone 6.
+  provisioner "remote-exec" {
+    inline = [
+      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-SRV01.ps1 -LocalAdminPassword '${var.local_admin_password}' -DomainAdminPassword '${var.domain_admin_password}'",
+    ]
+  }
 }

@@ -58,4 +58,30 @@ resource "proxmox_virtual_environment_vm" "dc01" {
     vlan_id     = var.network_vlan_servers
     mac_address = "02:00:00:00:00:C9" # docs/conventions.md — VMID 201.
   }
+
+  # Terraform's last act for this guest: bring it up, then hand off to
+  # powershell/ — never AD commands inline here, per the terraform-proxmox
+  # skill. Host is the DHCP-reservation address (opnsense/dhcp.tf task 3) — the
+  # only address DC01 has until its own first-boot script makes it static.
+  connection {
+    type     = "winrm"
+    host     = "10.10.20.10"
+    user     = "Administrator"
+    password = var.local_admin_password
+    https    = false
+    timeout  = "10m"
+  }
+
+  provisioner "file" {
+    source      = "../powershell"
+    destination = "C:/lab-provisioning"
+  }
+
+  # powershell/Bootstrap-DC01.ps1 does not exist yet — it lands in Milestone 6.
+  # One entry point, no chain of inline AD commands, per the skill.
+  provisioner "remote-exec" {
+    inline = [
+      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-DC01.ps1 -LocalAdminPassword '${var.local_admin_password}' -DomainAdminPassword '${var.domain_admin_password}'",
+    ]
+  }
 }

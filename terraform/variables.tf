@@ -45,3 +45,19 @@ variable "proxmox_bridge_trunk" {
   description = "Proxmox bridge carrying the tagged VLAN trunk (10/20/30) — see docs/hardware.md"
   default     = "vmbr1"
 }
+
+# No default on either — genuinely required, unlike the placeholders above.
+# terraform validate (unlike packer validate) does not need one; a real value
+# is only needed at apply, which nothing here can do yet anyway.
+
+variable "local_admin_password" {
+  type        = string
+  description = "The local Administrator password baked into the templates — set by Packer's rotate-admin-password.ps1, matched here so Terraform's WinRM connection can authenticate"
+  sensitive   = true
+}
+
+variable "domain_admin_password" {
+  type        = string
+  description = "Domain administrator password, for SRV01/CL01's eventual domain join — consumed by the powershell/ entry point, not by Terraform itself"
+  sensitive   = true
+}

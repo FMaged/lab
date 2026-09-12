@@ -903,7 +903,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
    Notes:
 
-7. [ ] Wire the WinRM handoff to powershell/
+7. [x] Wire the WinRM handoff to powershell/
    **What:** a connection block and provisioners on each Windows guest that upload
    `powershell/` and invoke its first-boot entry point, with the local admin and domain
    admin passwords passed as `sensitive` variables.
@@ -917,6 +917,21 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** `terraform validate` passes; every password variable is marked
    `sensitive = true`; no password appears as a literal anywhere in `terraform/`; the
    remote-exec invokes exactly one entry point rather than a list of AD commands.
+
+   Notes: confirmed `terraform validate` (unlike `packer validate`) does not
+   require a default, tested directly with a scratch variable before
+   committing to no-default secrets — so `local_admin_password` and
+   `domain_admin_password` have none, genuinely required, no placeholder
+   needed. One entry point per guest (`Bootstrap-DC01/SRV01/CL01.ps1`, none of
+   which exist yet), not one shared script — each guest's role is different
+   enough that a shared entry point would just be an if/else dispatching on
+   hostname; simpler to let Milestone 6 write three small scripts. Both
+   passwords passed to every guest, DC01 included, even though a domain
+   controller creating a domain and a member server joining one are different
+   operations — Milestone 6 decides what each script actually does with them;
+   this task only wires the mechanism. `https = false` on the connection block
+   since nothing here has certificates configured — WinRM over HTTP inside a
+   private lab VLAN no code outside this repo can reach.
 
    Notes:
 

@@ -68,4 +68,27 @@ resource "proxmox_virtual_environment_vm" "cl01" {
     vlan_id     = var.network_vlan_clients
     mac_address = "02:00:00:00:01:2D" # docs/conventions.md — VMID 301.
   }
+
+  # See the comment in vm-dc01.tf. Host is CL01's DHCP-reservation address —
+  # its only address, since CL01 stays on DHCP permanently.
+  connection {
+    type     = "winrm"
+    host     = "10.10.30.50"
+    user     = "Administrator"
+    password = var.local_admin_password
+    https    = false
+    timeout  = "10m"
+  }
+
+  provisioner "file" {
+    source      = "../powershell"
+    destination = "C:/lab-provisioning"
+  }
+
+  # powershell/Bootstrap-CL01.ps1 does not exist yet — Milestone 6.
+  provisioner "remote-exec" {
+    inline = [
+      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-CL01.ps1 -LocalAdminPassword '${var.local_admin_password}' -DomainAdminPassword '${var.domain_admin_password}'",
+    ]
+  }
 }
