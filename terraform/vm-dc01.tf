@@ -10,6 +10,16 @@ data "proxmox_virtual_environment_vms" "winsrv2025_template" {
     name   = "template"
     values = [true]
   }
+
+  # Without this, a missing or renamed template fails on vms[0] with an
+  # index-out-of-range error that names neither the template nor the cause —
+  # at the first real apply, when the operator has the least context.
+  lifecycle {
+    postcondition {
+      condition     = length(self.vms) == 1
+      error_message = "Expected exactly one Proxmox template named tpl-winsrv2025-de-v1 (docs/conventions.md), used by DC01 and SRV01. Run the Packer build in packer/ first, or check the template was not renamed."
+    }
+  }
 }
 
 resource "proxmox_virtual_environment_vm" "dc01" {
