@@ -1627,5 +1627,184 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
 ## Milestone 8: The lab is applied once on rented bare metal and the evidence is captured
 
-<!-- Not planned yet, and optional by design. Everything above stands without it.
-     Revisit sooner if the existing homelab host frees up, which would make it free. -->
+Optional by design — everything above stands without it. This is the milestone that turns
+"this should work" into "this ran", for roughly the price of a meal.
+
+It is also the only milestone whose `Accept` lines describe observable behaviour rather
+than a validator's opinion, because for the first time there is a machine to observe. And
+the only one that spends money while it runs: the machine is billed by the hour, so the
+protocol in task 2 exists to stop a debugging session becoming a bill.
+
+Branch this milestone per `docs/conventions.md`: one branch, one commit per task, one PR.
+
+1. [ ] SPIKE: which hourly bare metal product can actually run Proxmox (max 2h)
+   **Why:** the proof run decision in PLAN.md names Scaleway and Hetzner as examples, not
+   as a choice. Hourly billing, a custom OS install and roughly 32 GB of RAM are three
+   constraints that eliminate most products, and finding that out with a machine already
+   rented is the expensive way to learn it.
+   **How:** for each candidate check four things — billing granularity actually hourly and
+   not daily or monthly; whether Proxmox can be installed at all, by custom ISO, rescue
+   mode or a Debian image plus the Proxmox repository; RAM and disk against
+   `docs/hardware.md`; and whether the host firewall can restrict inbound traffic to one
+   address, which task 4 depends on. Note the hourly rate and the minimum billing period.
+   Output: one decision entry in PLAN.md naming the provider, the product and the rate
+
+2. [ ] Write the run protocol into docs/proof-run.md
+   **What:** the rules the run follows, written before it starts — the destroy deadline,
+   the per-failure time box, the budget ceiling, and what counts as done.
+   **Why:** every rule here is one that gets abandoned under pressure once a machine is
+   running and something is broken. Writing them down beforehand is the only time they can
+   be decided calmly, and a forgotten running machine is the single most likely way this
+   milestone costs real money.
+   **How:** fifteen minutes per failure, then capture and move on. A hard destroy deadline
+   set before renting. A stated ceiling at which the run stops regardless of progress.
+   State plainly that the machine gets destroyed even if the run fails, because fixing the
+   code offline is free and fixing it on the clock is not.
+   **Accept:** the file exists before any machine is rented; it names a destroy deadline, a
+   per-failure time box and a budget ceiling as specific numbers, not adjectives.
+
+   Notes:
+
+3. [ ] Resolve the public-WAN deltas before renting anything
+   **What:** the concrete changes needed because OPNsense's WAN faces the public internet
+   instead of a home router, decided and written down while it is still free to think.
+   **Why:** `docs/hardware.md` names the problem but does not solve it. Every value in
+   `docs/network-design.md` that mentions `192.168.1.0/24` has to be read as "the uplink",
+   and the default-deny posture stops being a demonstration and becomes the only thing
+   between the lab and the internet.
+   **How:** walk the firewall policy table and mark every rule whose meaning changes.
+   Decide whether the WAN address is static from the provider or DHCP. Confirm nothing in
+   `opnsense/firewall.tf` permits inbound WAN traffic — and if the run needs inbound access
+   at all, that it is scoped to one address, never left open.
+   **Accept:** a written list of every design value that changes under a public uplink; no
+   rule in `opnsense/firewall.tf` accepts unsolicited inbound WAN traffic; the decision on
+   static or DHCP WAN addressing is recorded.
+
+   Notes:
+
+4. [ ] Rent the machine, install Proxmox, and restrict access to one address
+   **What:** runbook section 1 executed for real — the machine rented, Proxmox installed,
+   and the host firewall restricting the web interface to your own public address before
+   that interface is reachable at all.
+   **Why:** this is a hypervisor on the public internet holding every VM in the lab. The
+   access decision was to allow-list rather than tunnel, which works only if the rule is in
+   place first and verified from somewhere else.
+   **How:** install per the provider's mechanism from task 1. Set the host firewall rule
+   **before** starting or exposing the Proxmox web service, not after. Then verify from a
+   second network — a phone on mobile data is enough — that the port is refused. Note your
+   public address in `docs/proof-run.md`; if it changes mid-run the interface locks you out,
+   which is the expected behaviour, not a fault.
+   **Accept:** Proxmox reachable from your address; the same port provably refused from a
+   different network, checked and recorded; runbook section 1 filled in with what was
+   actually done, and its "not started" marker removed.
+
+   Notes:
+
+5. [ ] Run runbook section 2 — both Packer templates
+   **What:** `packer build` producing `tpl-winsrv2025-de-v1` and `tpl-win11-de-v1` on the
+   real host.
+   **Why:** the image build has never run, and it is the layer with the longest feedback
+   loop and the most unknowns — the German ISO's image-index names have been flagged as a
+   residual unknown since the Windows 11 spike.
+   **How:** follow the section as written and change nothing on the machine that is not
+   also changed in the repository. A fix applied by hand is a fix that does not exist.
+   Apply the task 2 time box per failure.
+   **Accept:** both templates exist in Proxmox with the VM IDs and tags
+   `docs/conventions.md` specifies, or the failure is captured in `docs/proof-run.md` with
+   the exact error and the step it occurred at.
+
+   Notes:
+
+6. [ ] Run runbook section 3 — OPNsense routing the VLANs
+   **What:** the firewall VM created, installed and bootstrapped by hand, then
+   `terraform apply` in `opnsense/` creating the VLANs, DHCP, rules and NAT.
+   **Why:** this is the first test of the manual and code halves meeting at the boundary
+   PLAN.md drew between them, and of whether the pre-1.0 provider's resources behave as
+   their documentation claims.
+   **How:** the `-target` on the first apply matters — the root holds all four guests and a
+   plain apply would start the Windows machines before the network exists. Record which
+   settings the provider could not manage and had to stay manual; that is a correction to
+   the boundary decision, not a workaround.
+   **Accept:** each VLAN interface answers on its gateway address; a client on the Clients
+   VLAN receives a lease from the reservation; every provider resource that failed is
+   recorded with the reason.
+
+   Notes:
+
+7. [ ] Run runbook sections 4 and 5 — the domain and both members
+   **What:** DC01 promoted, SRV01 and CL01 joined, all three driven by their own Bootstrap
+   scripts across their own reboots.
+   **Why:** the reboot-resume mechanism and the credential ordering are the two most
+   intricate decisions in the project and the two with the least static verification. This
+   is the first and only time either is actually exercised.
+   **How:** watch the phase markers and transcripts under `C:\ProgramData\SILab` rather
+   than guessing from the machine's reachability — a guest mid-reboot looks identical to a
+   hung one. Confirm each computer object lands in the OU it was joined into, not the
+   default container.
+   **Accept:** `Test-SILab.ps1` runs and its full output is recorded, pass or fail; every
+   failing check is captured with the phase and transcript line it came from.
+
+   Notes:
+
+8. [ ] Capture the evidence
+   **What:** the screenshots and command output that become `docs/proof-run.md` — the CL01
+   logon banner above all, plus the forest, the OU tree with both computer objects, the
+   firewall rules, and the complete health check output.
+   **Why:** `docs/ad-design.md` named the logon banner as the one visible proof that a
+   policy reached a workstation, and the whole lab has been built toward it. Capturing
+   happens before the machine is destroyed, and there is no second chance.
+   **How:** capture more than seems necessary — a screenshot costs nothing now and cannot
+   be retaken later. Include failures, which are more interesting than successes and are
+   what task 11 works from. Check every image for a credential, an API token or a public
+   address before it goes anywhere near a commit.
+   **Accept:** the logon banner screenshot exists; the full `Test-SILab.ps1` output is
+   saved; no captured image or transcript contains a password, token or key, checked
+   deliberately rather than assumed.
+
+   Notes:
+
+9. [ ] Destroy the machine and confirm billing stopped
+   **What:** the server released, and the provider's console confirming it is gone and no
+   longer accruing charges.
+   **Why:** this is the task that protects the budget, and the one most likely to be
+   skipped because the interesting work already happened. It runs whether the lab worked or
+   not — fixing the code offline is free.
+   **How:** confirm task 8's captures are safely off the machine first, then destroy.
+   Check the provider's billing page afterwards rather than trusting the delete button, and
+   record the actual total cost in `docs/proof-run.md`.
+   **Accept:** the provider's console shows no running resource; the final cost is recorded;
+   nothing needed from the machine remains only on it.
+
+   Notes:
+
+10. [ ] Write docs/proof-run.md and retire every "never executed" claim
+    **What:** the proof run written up, and every marker in the repository that says the lab
+    has not run updated to say what actually happened.
+    **Why:** those markers exist in the README, all four runbook sections and several design
+    documents precisely so this moment is a documentation change rather than a rewrite. The
+    execution status decision in PLAN.md says the wording changes the moment a proof run
+    lands.
+    **How:** date, provider, cost, duration, what worked, what did not, and the evidence.
+    Be as plain about the failures as about the successes — a run where everything worked
+    first time would be the least believable outcome in the repository.
+    **Accept:** no "never executed" marker remains that is now false; the README execution
+    status section describes the run and links to `docs/proof-run.md`; the write-up states
+    what failed, not only what worked.
+
+    Notes:
+
+11. [ ] Turn what broke into tasks, and close runbook section 6
+    **What:** every failure captured during the run written up as a real task, and runbook
+    section 6 completed or explicitly retired.
+    **Why:** the value of the run is the list of things that were wrong, and that value
+    evaporates if it stays in a write-up nobody works from. Section 6 was written to cover a
+    full rebuild from zero, which is exactly what this run performed from a clean host.
+    **How:** one task per failure, with the captured error, in a new milestone if there are
+    enough to warrant one. For section 6, either fill it in from what this run did or mark
+    it `[~]` with the reason — a second full replay costs another rental and proves the same
+    thing twice.
+    **Accept:** every failure in `docs/proof-run.md` appears as a task or is explicitly
+    dismissed with a reason; runbook section 6 is either written or retired, with no
+    placeholder left behind.
+
+    Notes:
