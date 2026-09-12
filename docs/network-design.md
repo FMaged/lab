@@ -28,16 +28,33 @@ untagged frame has nowhere valid to go.
 | OPNsense (Servers) | 20 | 10.10.20.1 | gateway for VLAN 20 |
 | OPNsense (Clients) | 30 | 10.10.30.1 | gateway for VLAN 30 |
 | Proxmox host | 10 | 10.10.10.2 | web UI + API |
-| DC01 | 20 | 10.10.20.10 | static — it is the DNS server, so it cannot get its own address from DHCP |
-| SRV01 | 20 | 10.10.20.11 | static, same reason: a domain member server gets a stable address |
-| CL01 | 30 | DHCP (reservation optional) | ordinary client; proves DHCP + domain join together |
+| DC01 | 20 | 10.10.20.10 | reaches this address by DHCP reservation first, then PowerShell sets it statically — see below |
+| SRV01 | 20 | 10.10.20.11 | same bootstrap-then-static path as DC01 |
+| CL01 | 30 | 10.10.30.50 | DHCP reservation, mandatory — CL01 stays on DHCP permanently, this just pins the lease |
 
 ## DHCP
 
-OPNsense serves DHCP on VLAN 30 (Clients) only — pool `10.10.30.100`–`10.10.30.200`.
-VLANs 10 and 20 have no DHCP scope: every host on them is known in advance and
-listed in the static address table above, so DHCP there would only be a second place
-for an address to drift out of sync with this document.
+OPNsense serves Kea DHCP on two VLANs, for two different reasons:
+
+- **Clients (30)** has a real pool, `10.10.30.100`–`10.10.30.200`, plus a mandatory
+  reservation for CL01 at `10.10.30.50` (outside the pool, so it can never be handed
+  to anything else). CL01 stays on DHCP for the life of the lab — the reservation
+  only exists so its address is as stable as if it were static.
+- **Servers (20)** has reservations for DC01 and SRV01 and **no dynamic pool at
+  all**. This is deliberate, not an unfinished scope: an unknown MAC on this VLAN
+  gets nothing, so the reservation list is the only way onto it. See the bootstrap
+  addressing decision in PLAN.md for why a "static" VLAN runs DHCP at all — a
+  freshly cloned guest has no address until something gives it one, and Terraform
+  needs to reach it over WinRM before PowerShell can set anything.
+
+**Management (10)** still gets no DHCP scope of any kind — Proxmox and OPNsense's
+own management addresses are configured directly, never through this mechanism.
+
+The DHCP reservation is a bootstrap crutch for DC01 and SRV01, not their running
+state: PowerShell writes the same address statically at first boot, because a
+domain controller must not depend on DHCP responding after a reboot. CL01 is the
+opposite — DHCP is its permanent mechanism, the reservation just removes the
+"which address did it get this time" variable.
 
 ## DNS
 

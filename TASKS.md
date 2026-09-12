@@ -780,7 +780,7 @@ there is still no host.
 
 Branch this milestone per `docs/conventions.md`: one branch, one commit per task, one PR.
 
-1. [ ] Update the DHCP and addressing design in docs/network-design.md
+1. [x] Update the DHCP and addressing design in docs/network-design.md
    **What:** a reservation-only scope on the Servers VLAN with no dynamic pool, a
    reservation for CL01 on the Clients VLAN, and a paragraph saying the reservation is a
    bootstrap mechanism that PowerShell later replaces with a static address.
@@ -791,7 +791,11 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    reservations at 10.10.20.10 and 10.10.20.11, makes CL01's reservation mandatory rather
    than optional, and the static address table still shows the same addresses it does now.
 
-   Notes:
+   Notes: gave CL01 a fixed reservation address (10.10.30.50, outside the pool)
+   rather than leaving it floating — "mandatory reservation" needs an actual
+   address to reserve. Static address table rows for DC01/SRV01 now describe
+   the two-phase bootstrap-then-static path instead of just saying "static", so
+   a reader isn't left wondering how a no-DHCP host gets its first address.
 
 2. [ ] Add a MAC address scheme to docs/conventions.md
    **What:** a fixed MAC for each of the four guests, in a locally administered range, with
