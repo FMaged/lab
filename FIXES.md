@@ -168,3 +168,26 @@ by `terraform validate` / PSScriptAnalyzer, except where it says otherwise.
    for "does not exist yet" across the repository returns nothing.
 
    Notes: both removed. The wider grep found no other forward reference that has come true anywhere in `terraform/`, `opnsense/`, `packer/`, `powershell/` or `.github/`. The two remaining milestone references, both in `Bootstrap-DC01.ps1`, point at Milestone 8 and are still accurate.
+
+10. [x] Replace the link checker that downloads a binary to check local links
+    **What:** the `links` job, which used `lycheeverse/lychee-action@v2`, replaced with
+    `.github/scripts/check-markdown-links.py`.
+    **Why:** the job failed with `curl` exit 35, a TLS handshake error, while downloading
+    lychee's own release binary. The repository was fine; the release tag it asked for
+    exists. But per the CI decision in `PLAN.md` this harness is the project's only
+    feedback loop, and it was depending on a 20 MB download from a third party on every
+    single run — while passing `--exclude '^https?://'`, so it only ever checked relative
+    links, which needs no network whatsoever.
+    **How:** same pattern as the design consistency check — a script in `.github/scripts/`
+    that also runs locally. No downloads, no action pinning to maintain.
+    **Accept:** the job runs with no network access; a dead relative link and a dead
+    heading anchor each turn it red, demonstrated; no lychee reference remains outside the
+    comment explaining the change.
+
+    Notes: 72 relative links across 23 files, none broken. Both failure kinds proven on
+    scratch edits. The replacement is strictly stronger than what it replaced: it also
+    validates `#anchor` targets against the headings in the file they point at, which the
+    old invocation did not — that is what keeps the generated decision index in `PLAN.md`
+    honest. Re-running the old job would probably have succeeded, since the failure was
+    transient; it was replaced because the dependency was unnecessary, not because it was
+    broken.
