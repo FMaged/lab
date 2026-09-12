@@ -39,12 +39,12 @@ resource "proxmox_virtual_environment_vm" "cl01" {
   machine = "q35"
   bios    = "ovmf"
 
+  # "4m" is required for Secure Boot and the provider defaults to "2m";
+  # pre_enrolled_keys defaults to false. Both per the bpg/proxmox 0.112.0 docs for
+  # this resource. Neither is inherited from the template, so both are set here
+  # explicitly on every UEFI guest.
   efi_disk {
-    datastore_id = var.guest_datastore
-    # "4m" is required for Secure Boot and the provider defaults to "2m";
-    # pre_enrolled_keys defaults to false. Both per the bpg/proxmox 0.112.0 docs
-    # for this resource. Neither is inherited from the template, so both are set
-    # here explicitly on every UEFI guest.
+    datastore_id      = var.guest_datastore
     type              = "4m"
     pre_enrolled_keys = true
   }
@@ -100,7 +100,7 @@ resource "proxmox_virtual_environment_vm" "cl01" {
     destination = "C:/lab-provisioning"
   }
 
-  # powershell/Bootstrap-CL01.ps1 does not exist yet — Milestone 6.
+  # Runs powershell/Bootstrap-CL01.ps1, which takes it from here.
   provisioner "remote-exec" {
     inline = [
       "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-CL01.ps1 -LocalAdminPassword '${local.ps_local_admin_password}' -DomainAdminPassword '${local.ps_domain_admin_password}'",
