@@ -1834,7 +1834,7 @@ Numbered after Milestone 8 but runs before it — see the note at the top of Mil
 
 Branch this milestone per `docs/conventions.md`: one branch, one commit per task, one PR.
 
-1. [ ] SPIKE: can Packer drive the OPNsense installer and bake a config that boots routing (max 3h)
+1. [x] SPIKE: can Packer drive the OPNsense installer and bake a config that boots routing (max 3h)
    **Why:** OPNsense has no API for assigning a device to an interface or addressing it —
    its interfaces API has eleven controllers and none does that — and neither its
    installer nor its config importer runs unattended. Typing through the installer is the
@@ -1849,6 +1849,21 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    generated outside OPNsense and written into `config.xml`, so the key exists the moment
    a clone boots?
    Output: one decision entry in PLAN.md, stating which of the four held and which did not
+
+   Notes: researched live (2026-09-12) against OPNsense's own documentation and issue
+   tracker rather than assumed. All four held: `boot_command` is already proven twice
+   against Windows installers, so it can drive `bsdinstall`'s dialogs the same way; the
+   config-importer (a second FAT/FAT32 volume with `/conf/config.xml`, loaded before the
+   installer runs) is real, documented, and is OPNsense's own route for scripted
+   deployment, not a workaround; `vtnet0`/`vtnet1` naming is PCI-slot order, stable as
+   long as Terraform's clone keeps the template's `network_device` order; API secrets are
+   stored as a SHA-512-crypt hash identical in shape to `passwd`'s, so both the real
+   secret and its hash can be generated offline. One residual unknown carried to task 7:
+   whether the importer's device scan also reads an ISO9660 disc (what
+   `additional_iso_files` produces) or needs a raw FAT32 disk image instead — OPNsense's
+   own docs only describe a USB drive. Found and fixed in passing: the proof-run decision
+   in PLAN.md named Hetzner as an hourly-billed example without checking; see task 2.
+   Decision in PLAN.md.
 
 2. [ ] SPIKE: can the rented host install Proxmox unattended, and how does its token reach the operator (max 3h)
    **Why:** Proxmox's automated installer is real — `proxmox-auto-install-assistant`
