@@ -511,7 +511,7 @@ build one on.
 
    Notes:
 
-10. [ ] Fill in the image build section of docs/runbook.md
+10. [x] Fill in the image build section of docs/runbook.md
     **What:** the ordered steps to produce both templates on a real host — upload the ISOs,
     set the `PKR_VAR_*` values, run each build, confirm the templates appear.
     **Why:** CLAUDE.md makes a layer unfinished until its runbook section is written, and
@@ -520,7 +520,13 @@ build one on.
     **How:** fill the existing placeholder section. Mark clearly that these steps have never
     been executed, consistent with the execution status decision in PLAN.md.
 
-    Notes:
+    Notes: 6 steps — upload ISOs, fill the real var file, `packer init && packer
+    build .` (one invocation builds both templates, since they share one build
+    block), what to check if it hangs before WinRM (the three residual unknowns
+    from this milestone: drive letters, image-index names, password drift),
+    confirm both templates land at their reserved VMIDs, and the never-overwrite
+    rebuild rule. Opens with an explicit "never executed" per the execution status
+    decision.
 
 ## Milestone 4: OPNsense routes the lab VLANs
 
