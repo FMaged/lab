@@ -973,7 +973,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
    Notes:
 
-10. [ ] Confirm CI stays green and still fails on a break
+10. [x] Confirm CI stays green and still fails on a break
     **What:** both Terraform roots validating in CI with all four VMs and the new
     reservations declared, plus a throwaway check that a malformed resource still turns the
     job red.
@@ -984,6 +984,14 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     scratch commit, confirm red, revert. Same method as Milestone 2 task 8.
     **Accept:** both matrix legs green on the real branch; a deliberately malformed resource
     produces a red run; the scratch commit is not merged.
+
+    Notes: PR #4 (`feature/no-ref/provision-windows-guests`), all 6 jobs green
+    on the real code, `terraform (terraform)` and `terraform (opnsense)` both
+    included. Then a throwaway branch/PR off this one added a nonexistent
+    argument to `vm-cl01.tf`; `terraform (terraform)` alone went red at
+    `terraform validate`, `terraform (opnsense)` stayed green, branch deleted
+    without merging — same isolation-and-cleanup pattern as Milestone 2 task 8
+    and Milestone 4 task 10.
 
     Notes:
 
