@@ -773,7 +773,150 @@ green in CI against real resources — no host exists to apply them to.
 
 ## Milestone 5: Terraform provisions DC01, SRV01 and CL01 from the templates
 
-<!-- Not planned yet. -->
+The three Windows guests become code: cloned from the two Packer templates, tagged,
+VLAN-pinned, addressed by reservation, and handed to `powershell/` over WinRM. Ends when
+both Terraform roots validate green with all four VMs declared. Nothing is applied —
+there is still no host.
+
+Branch this milestone per `docs/conventions.md`: one branch, one commit per task, one PR.
+
+1. [ ] Update the DHCP and addressing design in docs/network-design.md
+   **What:** a reservation-only scope on the Servers VLAN with no dynamic pool, a
+   reservation for CL01 on the Clients VLAN, and a paragraph saying the reservation is a
+   bootstrap mechanism that PowerShell later replaces with a static address.
+   **Why:** the DHCP section currently states VLANs 10 and 20 have no scope at all, which
+   the bootstrap decision in PLAN.md now contradicts. The design document is the spec every
+   other layer implements, so it changes first, never last.
+   **Accept:** the DHCP section describes a pool-less Servers scope, names both server
+   reservations at 10.10.20.10 and 10.10.20.11, makes CL01's reservation mandatory rather
+   than optional, and the static address table still shows the same addresses it does now.
+
+   Notes:
+
+2. [ ] Add a MAC address scheme to docs/conventions.md
+   **What:** a fixed MAC for each of the four guests, in a locally administered range, with
+   the rule that derives it from the VMID.
+   **Why:** a DHCP reservation keys on MAC, so the address only stays stable across a
+   rebuild if Terraform pins the MAC rather than letting Proxmox generate one. That makes
+   the MAC an interface between the Terraform root and the OPNsense root, and both sides
+   need one document to read it from.
+   **How:** derive it from the VMID already assigned, so the MAC and the VMID cannot
+   disagree. Use a locally administered prefix, never a vendor OUI.
+   **Accept:** conventions lists one MAC per guest, each derivable from that guest's VMID
+   by the stated rule, and no two are equal.
+
+   Notes:
+
+3. [ ] Add the reservations to opnsense/dhcp.tf
+   **What:** a Servers VLAN Kea scope with reservations and no pool, plus a CL01
+   reservation in the existing Clients scope.
+   **Why:** this is the half of the bootstrap decision that lives in code, and without it
+   tasks 4 to 7 produce VMs that boot with no address and no way in.
+   **How:** addresses from `docs/network-design.md` and MACs from `docs/conventions.md` —
+   neither invented here. Comment that the absent pool is deliberate, or a later reader
+   will read it as an unfinished resource.
+   **Accept:** `terraform validate` passes in `opnsense/`; the Servers scope declares no
+   pool range; every reservation's address and MAC match the two design documents exactly.
+
+   Notes:
+
+4. [ ] Write terraform/vm-dc01.tf
+   **What:** DC01 cloned from `tpl-winsrv2025-de-v1`, VMID 201, VLAN 20, pinned MAC, tags
+   `lab` and `role-dc`, sized per `docs/hardware.md`.
+   **Why:** the domain controller is the guest everything else in the lab depends on, and
+   the first one to exercise the clone-from-template path the Packer milestone built.
+   **How:** `clone` block referencing the template by name from `docs/conventions.md`, not
+   by VMID, so a template version bump is a one-line change. Guest agent enabled, unlike
+   the OPNsense VM — these images have the tools installed.
+   **Accept:** `terraform validate` passes in `terraform/`; the resource sets an explicit
+   `vm_id` of 201, an explicit `vlan_id` of 20, the pinned MAC from task 2, and both tags.
+
+   Notes:
+
+5. [ ] Write terraform/vm-srv01.tf
+   **What:** SRV01, same template as DC01, VMID 202, VLAN 20, pinned MAC, tags `lab` and
+   `role-member-server`.
+   **Why:** the member server is what proves a domain join works on something other than
+   the controller itself, and it shares every structural choice with DC01.
+   **How:** mirror `vm-dc01.tf` and change only what genuinely differs. If the two files
+   end up identical apart from four values, say so in a comment rather than reaching for a
+   module — see the simplest-thing-that-works rule in PLAN.md.
+   **Accept:** `terraform validate` passes; VMID 202, VLAN 20, correct MAC and tags; the
+   diff against `vm-dc01.tf` touches only name, VMID, MAC, address and role tag.
+
+   Notes:
+
+6. [ ] Write terraform/vm-cl01.tf
+   **What:** CL01 cloned from `tpl-win11-de-v1`, VMID 301, VLAN 30, pinned MAC, tags `lab`
+   and `role-client`.
+   **Why:** CL01 is where the whole project becomes visible — a workstation that joins the
+   domain and shows a GPO actually applying.
+   **How:** clones the client template, not the server one. Windows 11 needs the TPM and
+   Secure Boot settings its template was built with, so confirm the clone carries them
+   rather than assuming a clone inherits firmware configuration.
+   **Accept:** `terraform validate` passes; the clone references the Windows 11 template;
+   VMID 301, VLAN 30, correct MAC and tags; TPM and Secure Boot are present on the resource
+   or explicitly confirmed in a comment as inherited from the template.
+
+   Notes:
+
+7. [ ] Wire the WinRM handoff to powershell/
+   **What:** a connection block and provisioners on each Windows guest that upload
+   `powershell/` and invoke its first-boot entry point, with the local admin and domain
+   admin passwords passed as `sensitive` variables.
+   **Why:** the `terraform-proxmox` skill makes this Terraform's last act — bring the VM up
+   with the first-boot PowerShell in place, then stop. The secrets decision in PLAN.md
+   already fixes that the passwords arrive this way rather than from a file in the guest.
+   **How:** WinRM host is the reserved address from task 3, known before the VM boots.
+   Upload the directory, then one `remote-exec` calling the entry point — no chain of
+   inline AD commands, which the skill forbids. The scripts themselves land in Milestone 6;
+   reference the path they will occupy and say so in a comment.
+   **Accept:** `terraform validate` passes; every password variable is marked
+   `sensitive = true`; no password appears as a literal anywhere in `terraform/`; the
+   remote-exec invokes exactly one entry point rather than a list of AD commands.
+
+   Notes:
+
+8. [ ] Write terraform/outputs.tf
+   **What:** outputs for each guest's name, address and VMID.
+   **Why:** Milestone 6 and the runbook both need to state where a guest is without
+   re-deriving it from the design docs, and an output is the one place that cannot drift
+   from what was actually declared.
+   **How:** no secrets in outputs, not even marked sensitive — nothing here needs one.
+   **Accept:** `terraform validate` passes; `terraform output` would name all four guests;
+   no output references a password variable.
+
+   Notes:
+
+9. [ ] Fill in runbook sections 4 and 5
+   **What:** the ordered steps to bring up DC01, then SRV01 and CL01 — the apply order
+   against the already-bootstrapped firewall, what to check after each, and the same
+   never-executed marker the other sections carry.
+   **Why:** AGENTS.md makes a layer unfinished until its runbook section is written, and the
+   ordering here is genuinely non-obvious: the firewall and its reservations must be live
+   before a single Windows guest is worth starting.
+   **How:** fill the existing placeholders. Point out that a guest booting before its
+   reservation exists will come up unreachable, since that is the failure a first-time
+   reader will hit.
+   **Accept:** sections 4 and 5 contain concrete commands rather than placeholders, state
+   the dependency on the firewall being bootstrapped first, and carry the never-executed
+   note verbatim from the other sections.
+
+   Notes:
+
+10. [ ] Confirm CI stays green and still fails on a break
+    **What:** both Terraform roots validating in CI with all four VMs and the new
+    reservations declared, plus a throwaway check that a malformed resource still turns the
+    job red.
+    **Why:** this milestone roughly triples the amount of Terraform in the repo, and per the
+    CI decision in PLAN.md static validation is the only evidence any of it is sound. A
+    harness that has quietly stopped checking would be indistinguishable from a passing one.
+    **How:** push the milestone branch, watch both matrix legs. Then break one resource on a
+    scratch commit, confirm red, revert. Same method as Milestone 2 task 8.
+    **Accept:** both matrix legs green on the real branch; a deliberately malformed resource
+    produces a red run; the scratch commit is not merged.
+
+    Notes:
 
 ## Milestone 6: PowerShell brings up AD DS, DNS, DHCP, the OU structure and the GPOs
 
