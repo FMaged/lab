@@ -1347,7 +1347,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    as the actual verification step, run once after section 5 rather than
    duplicated per section, since it checks the whole domain state at once.
 
-10. [ ] Get PSScriptAnalyzer green and prove it still fails
+10. [x] Get PSScriptAnalyzer green and prove it still fails
     **What:** the whole `powershell/` layer clean at Error and Warning in CI, plus a
     throwaway check that a real violation still turns the job red.
     **Why:** this milestone is the first code in the repo with no validator stronger than a
@@ -1360,7 +1360,21 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     analysed; a deliberately introduced violation produces a red run; the scratch commit is
     not merged.
 
-    Notes:
+    Notes: confirmed real, not assumed — ran the exact CI command locally
+    through PSScriptAnalyzer 1.25.0 first (all 5 scripts, 0 issues), then
+    checked PR #6's real check-runs on the milestone branch's head commit
+    (b0b4fc6): all 6 jobs green, `PSScriptAnalyzer` included. Then, same
+    method as Milestones 2/4/5's task 8/10, pushed a throwaway branch
+    (`test/no-ref/prove-powershell-ci-catches-breaks`, off this milestone
+    branch since main doesn't have `powershell/` yet) adding one deliberate
+    `Write-Host` call to `Test-SILab.ps1` — chosen over a cmdlet alias after
+    that alone turned out not to trigger `PSAvoidUsingCmdletAliases` on this
+    analyzer version, confirmed by testing both in isolation before trusting
+    either. Opened as PR #7 (I have no `gh` CLI or token in this environment,
+    same gap Milestone 2 task 1 hit — the user opened it manually so the
+    `pull_request` trigger would fire). Result: `PSScriptAnalyzer` alone went
+    red, all 5 other jobs stayed green, correctly isolating the failure to
+    this layer. Branch deleted, local and remote, without merging.
 
 11. [x] Add the Safe Mode recovery password to terraform/
     **What:** a third `sensitive` variable in `terraform/variables.tf`, passed to DC01's
