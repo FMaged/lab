@@ -41,7 +41,8 @@ moment a real build runs.
    and `tpl-win11-de-v1`, VM IDs 9000 and 9001, tagged `lab` plus their role tag.
 6. Re-running `packer build .` after a change always produces a *new* numbered
    template (`-v2`, `-v3`, …) per `docs/conventions.md` — it never overwrites
-   `-v1` in place, even before Milestone 5 has anything cloning from it yet.
+   `-v1` in place. `terraform/` clones by template *name*, so bumping the version
+   is a Terraform change too — the old template stays until nothing references it.
 
 ## 3. OPNsense setup
 
@@ -55,11 +56,33 @@ The manual/code boundary is interface assignment and addressing, not VLANs — s
 the decision in PLAN.md. Concretely, that means this half happens in two passes:
 some of it before `terraform apply` creates the VLAN devices, the rest after.
 
+Set these before starting — step 1 already needs the first two:
+
+| Variable | Used by | Value |
+| --- | --- | --- |
+| `PROXMOX_VE_ENDPOINT` | `terraform/` | the Proxmox API URL, from section 1 |
+| `PROXMOX_VE_API_TOKEN` | `terraform/` | the Proxmox API token created during section 1's host install |
+| `OPNSENSE_URI` | `opnsense/` | `https://` + OPNsense's Management address, `10.10.10.1` |
+| `OPNSENSE_API_KEY` | `opnsense/` | the key from step 5 below |
+| `OPNSENSE_API_SECRET` | `opnsense/` | the secret from step 5 below |
+
+The two OPNsense values do not exist until step 5 creates them. That is the
+bootstrapping problem this section exists to solve.
+
 **Before `terraform apply` for `terraform/vm-opnsense.tf`:**
 
-1. `terraform apply` (root: `terraform/`) creates the VM. Attach the OPNsense
-   installation ISO to the `local` datastore first, as `local:iso/opnsense.iso`
-   — the VM won't boot without it.
+1. Attach the OPNsense installation ISO to the `local` datastore first, as
+   `local:iso/opnsense.iso` — the VM won't boot without it. Then, from
+   `terraform/`, create **only the firewall**:
+
+   ```
+   terraform apply -target=proxmox_virtual_environment_vm.opnsense
+   ```
+
+   The `-target` is not optional. This root defines all four guests, and a plain
+   `apply` here would build the three Windows machines too — before the network
+   they need exists, so each would boot with no address and Terraform's WinRM
+   handoff would hang waiting on an address nothing is serving yet.
 
 **After the VM exists, before any Terraform touches `opnsense/`:**
 
@@ -68,8 +91,8 @@ some of it before `terraform apply` creates the VLAN devices, the rest after.
    UI login uses too).
 3. At the console menu, **Assign interfaces** (option 1): assign the WAN-bridge
    NIC as `wan` and note the trunk-bridge NIC's device name (e.g. `vtnet1`) —
-   it stays unassigned for now; it's the VLAN devices Terraform creates from it
-   in task 8 that get assigned, not the raw NIC itself.
+   it stays unassigned for now. It is the VLAN devices Terraform creates from it
+   in 3b that get assigned, not the raw NIC itself.
 4. Confirm WAN picked up a DHCP lease from the home router (console menu or
    Interfaces > WAN in the web UI) — no action needed if it did.
 5. In the web UI: **System > Settings > Administration**, enable the API.
@@ -77,7 +100,7 @@ some of it before `terraform apply` creates the VLAN devices, the rest after.
    key/secret pair. This is the literal bootstrapping problem the decision in
    PLAN.md describes — nothing in `opnsense/` can run before this exists.
 
-**After `terraform apply` for `opnsense/`'s VLAN devices exist (task 8):**
+**After 3b has run once and `opnsense/`'s VLAN devices exist:**
 
 6. **Interfaces > Assignments**: assign each of the three new VLAN devices
    (`vtnet1.10`, `vtnet1.20`, `vtnet1.30`, or whatever the tag suffix renders
@@ -87,34 +110,24 @@ some of it before `terraform apply` creates the VLAN devices, the rest after.
    (rather than the default `OPT1`/`OPT2`/`OPT3`) makes every later step, and
    every firewall rule, far easier to read.
 
-Environment variables the code half (3b) expects to already be set:
-
-| Variable | Used by | Value |
-| --- | --- | --- |
-| `PROXMOX_VE_ENDPOINT` | `terraform/` | the Proxmox API URL |
-| `PROXMOX_VE_API_TOKEN` | `terraform/` | the Proxmox API token from step above (Milestone 4's own bootstrap, not this one) |
-| `OPNSENSE_URI` | `opnsense/` | `https://` + OPNsense's Management address, `10.10.10.1` |
-| `OPNSENSE_API_KEY` | `opnsense/` | the key from step 5 |
-| `OPNSENSE_API_SECRET` | `opnsense/` | the secret from step 5 |
-
 ### 3b. Code — VLANs, DHCP, firewall
 
 Two roots, and they apply in a fixed order — `opnsense/` cannot run before 3a's
 manual steps give it an API to talk to, and its own VLAN devices don't exist
 for step 6 of 3a to assign until this runs once.
 
-1. `terraform apply` in `terraform/` (already done, to bring the OPNsense VM
-   up — see 3a step 1). Nothing else in this root exists yet; Milestone 5 adds
-   the three Windows guests to it.
+1. The targeted `terraform apply` in `terraform/` is already done — see 3a step 1.
+   The other three guests in that root stay uncreated until section 4; they have
+   nothing to boot into until this section finishes.
 2. Complete 3a steps 2–5 (install, WAN assignment, enable the API).
 3. `terraform init && terraform apply` in `opnsense/` — creates the three VLAN
    devices, the Clients DHCP scope, the aliases, every filter rule and the
    outbound NAT rule.
 4. Complete 3a step 6 (assign each VLAN device to an interface, address it).
 5. Verify: from a host on each VLAN, confirm it can reach its gateway and (for
-   Clients) that it received a DHCP lease with DC01 as its DNS server. Full
-   client-to-DC01 and domain verification waits for Milestone 6 — Milestone 5
-   only brings DC01 up as a VM, with no domain yet to test against.
+   Clients) that it received a DHCP lease with DC01 as its DNS server. There is
+   no DC01 yet at this point, so the DNS server it hands out is an address that
+   does not answer — that is expected here and fixed by section 4.
 
 Re-running `terraform apply` in `opnsense/` after a change is safe and expected
 — unlike the Packer templates, this root's resources are meant to be updated in
