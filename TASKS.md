@@ -1076,7 +1076,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    trigger under the `SYSTEM` principal, not `AtLogOn` — nobody logs on to
    these guests between phases.
 
-3. [ ] Write the first-boot phase: hostname, static address, DNS
+3. [x] Write the first-boot phase: hostname, static address, DNS
    **What:** the phase that renames the guest, replaces its DHCP-reserved address with the
    static one from `docs/network-design.md`, points DNS at DC01, and reboots.
    **Why:** the bootstrap decision in PLAN.md is explicit that the reservation is
@@ -1089,7 +1089,40 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    table for that host; no address is hardcoded in a way that contradicts
    `docs/network-design.md`; the phase marker advances and a reboot is requested.
 
-   Notes:
+   Notes: a real tension surfaced while writing this, not spelled out in the
+   task text: DC01's phase (task 4) needs the DSRM recovery password, and
+   SRV01's phase 2 (task 7) needs the domain admin password, but per the
+   credential-ordering decision in PLAN.md neither password may survive a
+   reboot, and Terraform invokes each entry point exactly once. If this
+   addressing phase rebooted on its own (as its wording literally suggests),
+   the resumed, scheduled-task-triggered invocation would have neither
+   password available, since only the very first invocation carries
+   Terraform's command-line arguments. Resolved by NOT calling
+   Restart-Computer at the end of this phase on either host: it writes the
+   phase-1 marker and falls straight through, in the same invocation, into
+   the credentialed phase that follows (promotion on DC01, join on SRV01) -
+   that phase's own reboot (Install-ADDSForest's, Add-Computer's) is the only
+   one, and it fires after the credential is already consumed. A second
+   consequence: SRV01's hostname change moves out of this phase entirely and
+   into Add-Computer -NewName during its join (task 7), a single supported
+   rename+join operation, rather than a separate Rename-Computer here - DC01
+   has no such combined cmdlet for promotion, so its rename genuinely does
+   stay in this phase, left pending (no -Restart) until Install-ADDSForest's
+   reboot finalizes both together. Confirmed real, not assumed: both files
+   run clean through the locally-installed PSScriptAnalyzer 1.25.0 (see task
+   2's note) once `PSAvoidUsingPlainTextForPassword` was suppressed via
+   `SuppressMessageAttribute` on both password parameters on both scripts
+   (the same accepted tradeoff task 4 anticipates for the recovery password -
+   these arrive as CLI arguments and cannot be SecureString) - and along the
+   way found that the attribute only takes effect placed at the
+   script/function scope naming its target parameter, not attached directly
+   to the parameter declaration inside `param()`, which silently does
+   nothing. `PSReviewUnusedParameter` is also suppressed for
+   `LocalAdminPassword` on both scripts (never used by either - it only ever
+   authenticates Terraform's own WinRM session) and for
+   `DomainAdminPassword` on DC01 only (DC01 never joins anything); SRV01's
+   `DomainAdminPassword` is left un-suppressed and currently still flags as
+   unused, since task 7 is what consumes it.
 
 4. [ ] Write the domain controller promotion phase
    **What:** the phase that installs AD DS, creates the forest `ad.silab.internal` with
