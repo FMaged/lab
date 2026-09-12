@@ -129,15 +129,43 @@ branch and watching that leg go red before reverting.
 
 ## 4. DC01 — domain controller
 
-*(Milestone 5 — not started. Will cover: `terraform apply` for DC01, then running
-the promotion PowerShell against `docs/ad-design.md`, and verifying AD DS/DNS come
-up.)*
+**Never executed.** Depends on section 3 being fully done first — no gateway, no
+DHCP reservation and no DNS path exist until the firewall is bootstrapped and
+its VLAN devices are assigned and addressed.
+
+1. `terraform apply` in `terraform/`, targeted at just DC01 first
+   (`-target=proxmox_virtual_environment_vm.dc01`) rather than all four guests
+   at once — DC01 has to exist and be reachable before SRV01/CL01's own applies
+   would mean anything, since they join a domain DC01 hasn't created yet.
+2. Proxmox clones the template, boots DC01, and it picks up its DHCP
+   reservation (`10.10.20.10` — `opnsense/dhcp.tf`). Terraform's WinRM
+   connection waits on exactly that address; if the reservation is missing or
+   the MAC doesn't match `docs/conventions.md`, this is where it hangs.
+3. Terraform uploads `powershell/` and runs `Bootstrap-DC01.ps1` — this script
+   does not exist yet (Milestone 6), so this step is unexecuted twice over:
+   no host, and no script.
+4. Once Milestone 6 exists: confirm AD DS, DNS and the OU structure from
+   `docs/ad-design.md` are up, and that DC01 now answers on its address
+   *statically* — the DHCP reservation was only ever how it got there the
+   first time.
 
 ## 5. SRV01 and CL01 — join the domain
 
-*(Milestone 6 — not started. Will cover: `terraform apply` for both, the domain-join
-PowerShell, and confirming the Workstation Baseline GPO's logon banner appears on
-CL01.)*
+**Never executed.** Depends on section 4 being complete — a domain that
+doesn't exist yet has nothing to join.
+
+1. `terraform apply` in `terraform/` again, this time for the remaining two
+   guests (or the whole root — DC01's apply is now a no-op). Both can go in
+   the same apply; neither depends on the other, only on DC01.
+2. Each picks up its own DHCP reservation (`10.10.20.11` for SRV01,
+   `10.10.30.50` for CL01) and gets its `Bootstrap-SRV01.ps1` /
+   `Bootstrap-CL01.ps1` run over WinRM — neither script exists yet, same
+   double-unexecuted caveat as section 4.
+3. Once Milestone 6 exists: confirm both show up as domain-joined computer
+   objects in the OUs `docs/ad-design.md` specifies (`Computers/Servers` for
+   SRV01, `Computers/Workstations` for CL01), and that CL01's logon screen
+   shows the Workstation Baseline GPO's banner — the one visible proof point
+   the whole lab has been building toward since Milestone 1.
 
 ## 6. Full rebuild, start to finish
 

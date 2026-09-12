@@ -950,7 +950,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    literals matching docs/network-design.md, not resource attributes — none of
    these VMs have a Terraform-managed IP config to read one from.
 
-9. [ ] Fill in runbook sections 4 and 5
+9. [x] Fill in runbook sections 4 and 5
    **What:** the ordered steps to bring up DC01, then SRV01 and CL01 — the apply order
    against the already-bootstrapped firewall, what to check after each, and the same
    never-executed marker the other sections carry.
@@ -963,6 +963,13 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** sections 4 and 5 contain concrete commands rather than placeholders, state
    the dependency on the firewall being bootstrapped first, and carry the never-executed
    note verbatim from the other sections.
+
+   Notes: DC01 gets its own `-target` apply, separate from SRV01/CL01 — the
+   real dependency isn't just "firewall before guests," it's "DC01 promoted
+   before anything tries to join its domain," which section 5 states as its
+   own precondition. Both sections flag that the Milestone 6 scripts they
+   reference (Bootstrap-DC01/SRV01/CL01.ps1) don't exist yet either, so
+   there's a double reason nothing here has run.
 
    Notes:
 
