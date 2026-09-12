@@ -69,12 +69,18 @@ resource "proxmox_virtual_environment_vm" "dc01" {
   # powershell/ — never AD commands inline here, per the terraform-proxmox
   # skill. Host is the DHCP-reservation address (opnsense/dhcp.tf task 3) — the
   # only address DC01 has until its own first-boot script makes it static.
+  #
+  # https = false with use_ntlm = true: HTTPS would need a certificate the
+  # template does not carry, but NTLM encrypts the message payload over the same
+  # port 5985. Without it the administrator password crosses the wire base64
+  # encoded and not encrypted. Setting only one of the two is the mistake.
   connection {
     type     = "winrm"
     host     = "10.10.20.10"
     user     = "Administrator"
     password = var.local_admin_password
     https    = false
+    use_ntlm = true
     timeout  = "10m"
   }
 

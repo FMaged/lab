@@ -81,6 +81,7 @@ resource "proxmox_virtual_environment_vm" "cl01" {
     user     = "Administrator"
     password = var.local_admin_password
     https    = false
+    use_ntlm = true
     timeout  = "10m"
   }
 
