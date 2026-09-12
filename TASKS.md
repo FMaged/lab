@@ -834,7 +834,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    "cannot be applied" claim in the terraform-opnsense skill that
    terraform-proxmox's already had corrected.
 
-4. [ ] Write terraform/vm-dc01.tf
+4. [x] Write terraform/vm-dc01.tf
    **What:** DC01 cloned from `tpl-winsrv2025-de-v1`, VMID 201, VLAN 20, pinned MAC, tags
    `lab` and `role-dc`, sized per `docs/hardware.md`.
    **Why:** the domain controller is the guest everything else in the lab depends on, and
@@ -845,7 +845,14 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** `terraform validate` passes in `terraform/`; the resource sets an explicit
    `vm_id` of 201, an explicit `vlan_id` of 20, the pinned MAC from task 2, and both tags.
 
-   Notes:
+   Notes: "by name" is a `proxmox_virtual_environment_vms` data source filtered
+   on name+template=true, feeding `clone.vm_id` — confirmed this data source
+   exists and returns `vm_id` per match before relying on it, rather than
+   assuming. Declared once here since vm-srv01.tf clones the same template and
+   both files share one root. No BIOS/EFI/TPM restated on the clone — a full
+   clone inherits the template's firmware config, so restating it would just be
+   a second place for it to drift. 2 cores, matching the ~8-core/4-guest host
+   budget in docs/hardware.md (that doc splits RAM per guest but not cores).
 
 5. [ ] Write terraform/vm-srv01.tf
    **What:** SRV01, same template as DC01, VMID 202, VLAN 20, pinned MAC, tags `lab` and
