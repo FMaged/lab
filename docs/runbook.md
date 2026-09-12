@@ -131,11 +131,19 @@ branch and watching that leg go red before reverting.
 
 **Never executed.** Depends on section 3 being fully done first — no gateway, no
 DHCP reservation and no DNS path exist until the firewall is bootstrapped and
-its VLAN devices are assigned and addressed. Also depends on
-`TF_VAR_local_admin_password`, `TF_VAR_domain_admin_password` and
-`TF_VAR_dsrm_recovery_password` all being set (or the equivalent
-`terraform.auto.tfvars` entries) — Terraform passes all three as command-line
-arguments to `Bootstrap-DC01.ps1`.
+its VLAN devices are assigned and addressed. Also depends on three more
+environment variables — none of the three has a default, since every one is a
+credential, and none belongs in `example.tfvars` for the same reason
+`PROXMOX_VE_API_TOKEN` never landed in a committed file:
+
+| Variable | Used by | Value |
+| --- | --- | --- |
+| `TF_VAR_local_admin_password` | `terraform/` | matches Packer's `rotate-admin-password.ps1` value, baked into every template |
+| `TF_VAR_domain_admin_password` | `terraform/` | domain administrator password — SRV01/CL01's join, and reused as DC01's own local Administrator password just before promotion (see step 3) |
+| `TF_VAR_dsrm_recovery_password` | `terraform/` | Directory Services Restore Mode password — DC01's `Install-ADDSForest` call only |
+
+Terraform passes all three as command-line arguments to each guest's
+Bootstrap script (DC01 gets all three; SRV01 and CL01 get the first two only).
 
 1. `terraform apply` in `terraform/`, targeted at just DC01 first
    (`-target=proxmox_virtual_environment_vm.dc01`) rather than all four guests

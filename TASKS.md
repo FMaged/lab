@@ -1362,7 +1362,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
     Notes:
 
-11. [ ] Add the Safe Mode recovery password to terraform/
+11. [x] Add the Safe Mode recovery password to terraform/
     **What:** a third `sensitive` variable in `terraform/variables.tf`, passed to DC01's
     remote-exec invocation only.
     **Why:** `Install-ADDSForest` requires a directory restore password and Terraform
@@ -1377,7 +1377,21 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     `sensitive = true`; it appears in `vm-dc01.tf` and in no other guest file; the runbook
     table lists it alongside the other two.
 
-    Notes:
+    Notes: "alongside the other two" assumed a table already existed for
+    `local_admin_password`/`domain_admin_password` - it didn't (checked
+    `terraform/example.tfvars` and every table in `docs/runbook.md`; neither
+    ever listed either, correctly, since both are credentials with no
+    default and don't belong in a committed file for the same reason
+    `PROXMOX_VE_API_TOKEN` never did). Added a new three-row table to
+    section 4 instead of a fourth row to a table that isn't there, and left
+    `example.tfvars` untouched rather than adding a precedent-setting
+    password row to it. Real fmt/validate both green locally
+    (terraform 1.16.1-equivalent CLI happens to be installed on this
+    machine, matching Milestone 4/5's own "confirmed real, not assumed"
+    notes) - `dsrm_recovery_password` has no default, is `sensitive = true`,
+    and is passed as `-SafeModeAdminPassword` only in `vm-dc01.tf`'s
+    remote-exec; `vm-srv01.tf`/`vm-cl01.tf` are untouched, matching task 4's
+    parameter list on those two scripts.
 
 ## Milestone 7: The repo reads as a finished portfolio piece
 

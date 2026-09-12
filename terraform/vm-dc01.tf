@@ -77,11 +77,12 @@ resource "proxmox_virtual_environment_vm" "dc01" {
     destination = "C:/lab-provisioning"
   }
 
-  # powershell/Bootstrap-DC01.ps1 does not exist yet — it lands in Milestone 6.
   # One entry point, no chain of inline AD commands, per the skill.
+  # SafeModeAdminPassword is DC01-only — SRV01/CL01 have no forest to
+  # recover, so neither of their invocations takes this argument.
   provisioner "remote-exec" {
     inline = [
-      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-DC01.ps1 -LocalAdminPassword '${var.local_admin_password}' -DomainAdminPassword '${var.domain_admin_password}'",
+      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-DC01.ps1 -LocalAdminPassword '${var.local_admin_password}' -DomainAdminPassword '${var.domain_admin_password}' -SafeModeAdminPassword '${var.dsrm_recovery_password}'",
     ]
   }
 }
