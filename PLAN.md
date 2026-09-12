@@ -338,3 +338,26 @@ the policy so the rules implement a written spec rather than accumulating.
 Rejected: VLAN isolation with broad allows between Clients and Servers — far fewer rules,
 but it gives up the part that demonstrates the skill.
 Rejected: filtering only at the WAN edge — a flat network with extra steps.
+
+### The manual/code boundary is interface assignment and addressing, not VLANs
+
+Why: checked the pinned browningluke/opnsense 0.26.0 resource list directly (47
+resources, not the provider's latest docs) rather than assume. `opnsense_interfaces_vlan`
+creates a VLAN's tag/parent/device — that part is code. Nothing in 0.26.0 assigns a raw
+interface (physical NIC or VLAN device) to a logical slot (WAN/LAN/OPTx) or sets its IP
+address; `interfaces_vip` is virtual IPs (CARP-style), not primary addressing, and no
+other resource covers it either. DHCP (Kea) and firewall (filter/NAT/aliases) are both
+fully covered.
+How: the manual half (runbook 3a) is the ISO install, assigning the two physical NICs
+(WAN uplink, VLAN trunk), enabling the API and creating a key, then — after `terraform
+apply` creates the three VLAN devices — manually assigning each to an interface slot and
+giving it its static address from `docs/network-design.md`. The code half (3b) is the
+VLAN tag resources, the Kea scope, and every firewall rule.
+Consequence: `terraform apply` for `opnsense/` cannot be the last step for a VLAN to
+become usable — each of the three VLAN devices it creates still needs one manual
+assignment+address step before DHCP or firewall rules on it mean anything. State this
+order explicitly in the runbook, not just the split.
+Rejected: waiting for a future provider version that might add interface assignment —
+pins the milestone to an upstream release with no date freely chosen by this project.
+Rejected: treating the whole `opnsense/` root as not worth it since it can't reach 100%
+automation — the DHCP and firewall layer is real, substantial code either way.

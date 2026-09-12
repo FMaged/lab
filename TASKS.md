@@ -535,7 +535,7 @@ under `terraform apply`. This milestone also scaffolds the `terraform/` root, be
 OPNsense VM is the first resource to land in it. Ends when both Terraform roots validate
 green in CI against real resources — no host exists to apply them to.
 
-1. [ ] SPIKE: where exactly does the manual/code boundary fall (max 2h)
+1. [x] SPIKE: where exactly does the manual/code boundary fall (max 2h)
    **Why:** the bootstrap decision in PLAN.md fixes that there is a manual half, but not
    its size. Interface assignment and interface addressing are core OPNsense settings and
    may not be exposed as provider resources at all, while VLAN creation, DHCP and rules
@@ -545,6 +545,12 @@ green in CI against real resources — no host exists to apply them to.
    version, not the latest docs, and sort every item in `docs/network-design.md` into
    manual or code. Note anything the provider claims to support but marks experimental.
    Output: one decision entry in PLAN.md, and the split that task 5 writes down
+   Notes: checked the actual v0.26.0 docs/resources listing (47 files) rather than the
+   provider's latest docs. Confirmed: opnsense_interfaces_vlan (tag/parent/device) plus
+   full Kea DHCP and firewall/NAT/alias coverage exist; nothing assigns a raw interface
+   to a logical slot or sets its IP (interfaces_vip is CARP-style VIPs, not primary
+   addressing) — that stays manual, done *after* Terraform creates the VLAN devices, not
+   before. Decision in PLAN.md.
 
 2. [ ] Write the firewall policy into docs/network-design.md
    **What:** a rule table — source, destination, service, and the reason the rule exists —
