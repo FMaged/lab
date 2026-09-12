@@ -66,3 +66,27 @@ a VM boots, a domain forms, or a firewall rule actually blocks anything. That pr
 is Milestone 8: an optional run on rented bare metal, captured as evidence. See
 [TASKS.md](TASKS.md) for what's done and what's next; this section's wording
 updates the moment a real proof run lands.
+
+## Scope — what this deliberately does not do
+
+Each of these is a decision, not an omission. The reasoning is in
+[PLAN.md](PLAN.md); this is the short version.
+
+| Left out | Why |
+| --- | --- |
+| High availability, clustering, failover | One host, one site. Redundancy would add machinery without demonstrating anything the single-site design does not. |
+| Backup, monitoring, log aggregation | Each is a project of its own. Adding a half-built one would say less than leaving it out deliberately. |
+| Cloud and hybrid identity | No Entra ID, no directory sync. The point is the on-premises fundamentals. |
+| Image generalization (sysprep) | The clones share a machine SID, which is harmless because domain join issues a fresh machine account. The tradeoff is written up in full in PLAN.md. |
+| A second domain controller | Replication is worth showing, but not at the cost of the client that proves a policy actually reaches a workstation. |
+| Any of it running | No Proxmox host exists. See [Execution status](#execution-status) above. |
+
+## What would come next
+
+1. **The proof run.** Rent bare metal by the hour, apply the whole repository once,
+   capture the evidence, destroy it. Planned as Milestone 8 in [TASKS.md](TASKS.md)
+   and deliberately optional — everything before it stands on its own.
+2. **A second domain controller.** Replication and DNS redundancy, once there is a
+   host with room for a fifth VM.
+3. **Backup and monitoring**, in that order. Backup first, because a lab that cannot
+   be restored teaches the wrong habit.
