@@ -23,9 +23,17 @@ resource "proxmox_virtual_environment_vm" "dc01" {
     full  = true
   }
 
-  # Machine type, BIOS/OVMF and the EFI disk all come from the template via the
-  # full clone above — restating them here would just be a second place for
-  # them to drift from what the template actually is.
+  # Restated explicitly rather than relied on as clone inheritance — the
+  # provider's own clone guide is not fully specific about which fields
+  # inherit and which fall back to schema defaults, and a documented issue
+  # exists where a full clone did not carry over the source's full config.
+  # Matches packer/windows-server-2025.pkr.hcl's source block exactly.
+  machine = "q35"
+  bios    = "ovmf"
+
+  efi_disk {
+    datastore_id = var.guest_datastore
+  }
 
   cpu {
     cores = 2

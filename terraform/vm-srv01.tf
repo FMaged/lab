@@ -14,6 +14,14 @@ resource "proxmox_virtual_environment_vm" "srv01" {
     full  = true
   }
 
+  # Restated, not relied on as inheritance — see the comment in vm-dc01.tf.
+  machine = "q35"
+  bios    = "ovmf"
+
+  efi_disk {
+    datastore_id = var.guest_datastore
+  }
+
   cpu {
     cores = 2
   }

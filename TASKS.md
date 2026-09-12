@@ -872,7 +872,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    clone source, cpu, agent, disk and vlan_id don't. Reuses vm-dc01.tf's data
    source rather than redeclaring it. Real fmt/validate both green.
 
-6. [ ] Write terraform/vm-cl01.tf
+6. [x] Write terraform/vm-cl01.tf
    **What:** CL01 cloned from `tpl-win11-de-v1`, VMID 301, VLAN 30, pinned MAC, tags `lab`
    and `role-client`.
    **Why:** CL01 is where the whole project becomes visible — a workstation that joins the
@@ -883,6 +883,23 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** `terraform validate` passes; the clone references the Windows 11 template;
    VMID 301, VLAN 30, correct MAC and tags; TPM and Secure Boot are present on the resource
    or explicitly confirmed in a comment as inherited from the template.
+
+   Notes: did the research the task asked for and it paid off — the provider's
+   own clone guide only confirms `agent` inherits from the template explicitly,
+   says nothing specific about BIOS/EFI/TPM, and a real GitHub issue documents
+   full clones NOT inheriting the full source config in some cases. Went with
+   the safer of the two Accept paths: restated machine/bios/efi_disk/tpm_state
+   explicitly rather than trust inheritance, on CL01 *and* retroactively on
+   DC01/SRV01 (same risk, task 4/5 just hadn't surfaced it — this task's
+   research applies to all three, so fixing only CL01 would have been
+   inconsistent). First attempt used Packer's block/argument names
+   (`efi_config`/`tpm_config`/`tpm_storage_pool`) by analogy with
+   packer/windows-11.pkr.hcl — validate immediately rejected them; the real
+   Terraform resource uses `efi_disk`/`tpm_state`/`datastore_id`, a different
+   schema from Packer's plugin despite both being Proxmox tools. No
+   `pre_enrolled_keys` equivalent exists here — Secure Boot's keys ship
+   enrolled in the "4m" OVMF firmware image itself. Real fmt/validate green
+   after the fix, on all three files.
 
    Notes:
 
