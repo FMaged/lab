@@ -4,12 +4,6 @@ variable "proxmox_node" {
   default     = "pve" # placeholder — see the secrets/placeholder reasoning in packer/variables.pkr.hcl.
 }
 
-variable "iso_datastore" {
-  type        = string
-  description = "Datastore holding the OPNsense installation ISO"
-  default     = "local"
-}
-
 variable "guest_datastore" {
   type        = string
   description = "Datastore for guest disks"

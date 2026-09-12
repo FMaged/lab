@@ -2079,7 +2079,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    device name (guessed as `cd1`) cannot be confirmed without a live install.
    Left exactly that honest rather than invented false precision.
 
-8. [ ] Clone the firewall from its template and hand the VLANs to it
+8. [x] Clone the firewall from its template and hand the VLANs to it
    **What:** `terraform/vm-opnsense.tf` cloning `tpl-opnsense-v1` instead of booting an
    ISO, and the VLAN devices removed from `opnsense/interfaces.tf`.
    **Why:** a template that boots with its VLANs already assigned means those devices exist
@@ -2093,7 +2093,25 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    postcondition; `opnsense/` declares no VLAN device the template creates; both roots pass
    `terraform validate`; neither skill still describes the old arrangement.
 
-   Notes:
+   Notes: deleted `opnsense/interfaces.tf` outright rather than leaving it empty —
+   nothing else in `opnsense/` references its resources (checked with a grep before
+   removing), and an empty file with just a comment isn't a pattern used anywhere
+   else in the repo. That made `trunk_parent_interface` dead too (its only
+   reference was the deleted file), so it came out of `opnsense/variables.tf` and
+   `example.tfvars` along with it — the trunk's device name now only matters
+   inside `packer/opnsense.pkr.hcl`/`config.xml`, which don't read a Terraform
+   variable for it. Also removed `terraform/`'s now-unused `iso_datastore`
+   variable (only the deleted `cdrom` block read it) from `variables.tf` and
+   `example.tfvars`, and fixed `opnsense/variables.tf`'s `opnsense_interface_*`
+   comments, which had called opt1/opt2/opt3 an unconfirmed guess pending a
+   manual runbook step that no longer exists — they're a fact the template sets
+   now, not a placeholder. Gave OPNsense's WAN NIC its documented MAC
+   (`docs/conventions.md`, VMID 101) for the first time — the ISO-boot version
+   never set one since nothing depended on it, but the "every guest has one
+   documented MAC" convention already intended it (Milestone 5 task 2's own
+   note said as much). Confirmed real: `terraform fmt`/`init`/`validate` green
+   in both roots, `check-design-consistency.py` and `check-markdown-links.py`
+   both still pass.
 
 9. [ ] Make the Proxmox host install itself
    **What:** a templated `proxmox/answer.toml`, the step that prepares an installer ISO

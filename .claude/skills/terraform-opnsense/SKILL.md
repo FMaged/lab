@@ -1,6 +1,6 @@
 ---
 name: terraform-opnsense
-description: Conventions for this repo's OPNsense configuration via the browningluke/opnsense Terraform provider — layout under opnsense/, VLAN interfaces, Kea DHCP, firewall filter rules and NAT as Terraform resources, and the pre-1.0 provider-stability risk. Use when writing or changing anything under opnsense/, when the user mentions OPNsense, the browningluke provider, firewall rules, VLAN interfaces or DHCP config as Terraform resources. Not for VM provisioning against Proxmox (see terraform-proxmox) and not for the base image (see packer-windows).
+description: Conventions for this repo's OPNsense configuration via the browningluke/opnsense Terraform provider — layout under opnsense/, Kea DHCP, firewall filter rules and NAT as Terraform resources, and the pre-1.0 provider-stability risk. VLAN interfaces are baked into tpl-opnsense-v1 at build time (see packer-windows), not created by this root. Use when writing or changing anything under opnsense/, when the user mentions OPNsense, the browningluke provider, firewall rules or DHCP config as Terraform resources. Not for VM provisioning against Proxmox (see terraform-proxmox) and not for the base image (see packer-windows).
 ---
 
 # OPNsense-via-Terraform conventions for the SI lab
@@ -14,7 +14,9 @@ part of the same `terraform apply` as every VM, not a second automation mechanis
 Code lives in `opnsense/`, as its own Terraform root (separate state from
 `terraform/`, since OPNsense and the Proxmox VMs have independent lifecycles — the
 firewall config does not need to change every time a VM does, and vice versa). One
-file per concern: `provider.tf`, `interfaces.tf`, `dhcp.tf`, `firewall.tf`.
+file per concern: `provider.tf`, `dhcp.tf`, `firewall.tf`. No `interfaces.tf` — the
+three VLAN devices are baked into `tpl-opnsense-v1` by `packer/files/config.xml`
+now, not created by this root (PLAN.md's zero-touch decision).
 
 Addresses, VLAN IDs and DHCP pools come from `docs/network-design.md` — never
 invent one here; if the design is wrong, change the design first.
@@ -28,12 +30,13 @@ invent one here; if the design is wrong, change the design first.
 - **API key/secret auth**, from `OPNSENSE_API_KEY` / `OPNSENSE_API_SECRET`
   environment variables — never written to a file, per the secrets decision in
   `PLAN.md`.
-- **This root configures a firewall that already exists.** Installing OPNsense,
-  assigning its interfaces, addressing them and enabling the API are a documented manual
-  bootstrap — see the bootstrap decision in `PLAN.md` and section 3a of
-  `docs/runbook.md`. Everything past the API key is code. If a setting turns out not to
-  be exposed as a resource, it moves into the runbook's manual half with a note, never
-  into a shell script wrapped in a provisioner.
+- **This root configures a firewall that boots already routing.** Installing OPNsense,
+  assigning its interfaces and addressing them, and enabling the API, all happen once,
+  at build time, in `packer/files/config.xml` — not a manual step by an operator any
+  more (see the zero-touch decision in `PLAN.md`, which superseded the original manual
+  bootstrap decision). Everything past the API key is still this root's job. If a
+  setting turns out not to be exposed as a resource, it moves into `packer/files/config.xml`
+  with a note, never into a shell script wrapped in a provisioner.
 - **Rules are least privilege with a reason on each one.** `docs/network-design.md`
   carries the policy table; this root implements it. A rule that is not in that table
   does not belong here, and a broad allow between VLANs contradicts a decision in
