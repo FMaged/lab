@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 
 Import-Module ActiveDirectory -ErrorAction Stop
 Import-Module GroupPolicy -ErrorAction Stop
+Write-Host 'Starting SI Lab health check'
 
 $script:FailureCount = 0
 
