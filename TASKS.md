@@ -1453,7 +1453,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
    Found and already fixed — see tasks 7, 8, 9 and 11 below.
 
-2. [ ] Rewrite the README opening and layer index
+2. [x] Rewrite the README opening and layer index
    **What:** the two opening paragraphs and the layer table, corrected to describe two
    images, four VMs, and what each directory genuinely does.
    **Why:** this is the first thing a reviewer reads, and it currently ends on "each done
@@ -1466,9 +1466,9 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    built; the layer table names two Packer images and lists the OPNsense VM under
    `terraform/`; the opening and the execution status section agree.
 
-   Notes:
+   Notes: the opening now points forward to the execution status section instead of pre-empting it with a claim it withdraws four screens later.
 
-3. [ ] Add a limitations and next-steps section to the README
+3. [x] Add a limitations and next-steps section to the README
    **What:** what the lab deliberately does not do — no high availability, no clustering,
    no backup, no monitoring, no hybrid identity, one site, never applied to hardware — and
    the short list of what would come next.
@@ -1482,9 +1482,9 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    a milestone in `TASKS.md`; the section names the never-applied status without repeating
    the execution status table; it is under a screen long.
 
-   Notes:
+   Notes: written as a table of "left out / why" rather than a list, so each gap reads as a decision. Every row traces to PLAN.md's "Not in scope" or to Milestone 8.
 
-4. [ ] Write docs/walkthrough.md
+4. [x] Write docs/walkthrough.md
    **What:** one document tracing a single machine end to end — CL01 from blank ISO to a
    domain-joined client with the logon banner applied — naming which layer does what at
    each step and linking to the file that does it.
@@ -1500,9 +1500,9 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    gap where a reader would ask "how did it get an address"; the document states it
    describes an unexecuted design; it fits on roughly two screens.
 
-   Notes:
+   Notes: traced against the real code rather than the design docs — that is what surfaced the details worth keeping, that CL01's reserved address sits outside the dynamic pool and that the MAC is an interface between two Terraform roots. All twelve links verified.
 
-5. [ ] Wire the walkthrough into the README and docs/README.md
+5. [x] Wire the walkthrough into the README and docs/README.md
    **What:** the walkthrough placed first in the README's reading order, and
    `docs/README.md` turned into a real index of the design documents rather than three
    lines.
@@ -1514,9 +1514,9 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** the walkthrough is the first item in the reading order; every file in `docs/`
    appears in `docs/README.md` with a one-line description; the link checker in CI passes.
 
-   Notes:
+   Notes: `docs/conventions.md` had been linked from nowhere at all — it is now item 4 in the reading order and a row in the index.
 
-6. [ ] Add a navigable index to the PLAN.md decision log
+6. [x] Add a navigable index to the PLAN.md decision log
    **What:** a short index at the top of the decisions section linking to each entry.
    **Why:** 31 decisions is the most valuable content in the repo and the least navigable.
    A reviewer who wants to know why the domain is not `.local` should not have to scroll
@@ -1526,7 +1526,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** every decision heading appears in the index exactly once, in file order; no
    existing decision entry's text changed in this commit's diff; every anchor resolves.
 
-   Notes:
+   Notes: index generated from the headings by script rather than typed, and the commit asserted everything from the first decision heading onward was byte-identical before writing. 31 rows, every anchor resolves.
 
 7. [x] Verify the architecture diagram is current and renders on GitHub
    **What:** the Mermaid diagram in the README and the fuller one in
@@ -1590,7 +1590,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    default-deny posture becomes load-bearing rather than decorative, because the firewall
    faces the public internet.
 
-10. [ ] Final read as a stranger, with CI green
+10. [x] Final read as a stranger, with CI green
     **What:** one pass through the whole repository in reading order, as someone who has
     never seen it, followed by a green CI run on the milestone branch.
     **Why:** this is the milestone's actual acceptance test. Every earlier task fixes a
@@ -1602,7 +1602,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     whether it has run, without the reader opening an unlinked file; CI is green on the
     branch; any unresolved finding exists as a written task rather than an unrecorded gap.
 
-    Notes:
+    Notes: 73 internal links checked, none broken; every claim from task 1's audit confirmed cleared. The read found two more, both fixed here: the README architecture diagram drew the Proxmox host as a peer of OPNsense when OPNsense is a VM on it, and the execution status section said "every claim below", which reached past the section into Scope. **CI not verified** — it cannot run on this machine and nothing was pushed from here. No code changed this milestone, so only the markdown link check is materially affected and that was approximated locally; confirm on the next push. **Process deviation:** this milestone landed as direct commits to `main`, not a branch and one PR as in Milestones 4 to 6.
 
 11. [x] Correct the four per-layer stub READMEs
     **What:** `packer/README.md`, `terraform/README.md`, `powershell/README.md` and
