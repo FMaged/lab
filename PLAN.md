@@ -80,6 +80,7 @@ status decision below.
 | 32 | [Every credential lives in one gitignored .env at the repository root](#every-credential-lives-in-one-gitignored-env-at-the-repository-root) |
 | 33 | [OPNsense ships as a Packer template, configured via its own live-image importer](#opnsense-ships-as-a-packer-template-configured-via-its-own-live-image-importer) |
 | 34 | [The Proxmox host installs itself from an answer file; its tokens travel to the operator over SSH](#the-proxmox-host-installs-itself-from-an-answer-file-its-tokens-travel-to-the-operator-over-ssh) |
+| 35 | [Zero-touch deployment supersedes the manual OPNsense bootstrap and hardens the manual/code boundary finding](#zero-touch-deployment-supersedes-the-manual-opnsense-bootstrap-and-hardens-the-manualcode-boundary-finding) |
 
 ### Topology is domain controller, member server, client and firewall
 
@@ -343,6 +344,15 @@ mechanism this project rejected on its merits, and it would be unverifiable unti
 proof run.
 Rejected: calling the whole firewall manual — it would leave the layer with the most
 interesting content, the rule set, outside the repo.
+Replaced by: [Zero-touch deployment supersedes the manual OPNsense bootstrap and hardens
+the manual/code boundary finding](#zero-touch-deployment-supersedes-the-manual-opnsense-bootstrap-and-hardens-the-manualcode-boundary-finding).
+The rejection of a seeded config.xml above was right about the mechanism this project
+had rejected on its merits at the time — a file dropped at first boot, unversioned and
+outside git. It was wrong to assume that was the only shape a seeded config could take.
+A config template that lives in the repository, is rendered from `docs/network-design.md`
+and `.env` at build time, and is baked into a Packer template the same way every other
+image in this project is, is not that mechanism — it is the same discipline this project
+already applies to the two Windows answer files.
 
 ### The OPNsense VM is defined in terraform/ with every other VM
 
@@ -413,6 +423,16 @@ assignment+address step before DHCP or firewall rules on it mean anything. State
 order explicitly in the runbook, not just the split.
 Rejected: waiting for a future provider version that might add interface assignment —
 pins the milestone to an upstream release with no date freely chosen by this project.
+Amended by [Zero-touch deployment supersedes the manual OPNsense bootstrap and hardens
+the manual/code boundary finding](#zero-touch-deployment-supersedes-the-manual-opnsense-bootstrap-and-hardens-the-manualcode-boundary-finding):
+the finding above still holds exactly as checked — no resource in the pinned provider
+assigns an interface or sets its address, and none has appeared since. Only the
+consequence changes. What used to mean a person doing that one step by hand after every
+`terraform apply` now means a Packer template that boots with the assignment already
+made, because the same live-image importer that solves the OPNsense bootstrap (see the
+replacement above) sets interface assignment and addressing too, before the installed
+system's own first boot ever reaches the point of asking. The `opnsense/` root still
+owns everything the API actually reaches — DHCP, firewall, NAT, aliases — unchanged.
 Rejected: treating the whole `opnsense/` root as not worth it since it can't reach 100%
 automation — the DHCP and firewall layer is real, substantial code either way.
 
@@ -647,3 +667,34 @@ Note: the billing check above corrects [The proof run is rented hourly bare meta
 purchased hardware](#the-proof-run-is-rented-hourly-bare-metal-not-purchased-hardware),
 which named Hetzner and Scaleway as interchangeable without checking either provider's
 actual terms — see the note added there.
+
+### Zero-touch deployment supersedes the manual OPNsense bootstrap and hardens the manual/code boundary finding
+
+Why: Milestones 9 and 10 exist to remove every step Milestone 8's runbook currently asks
+a person to do by hand before a proof run runs up a bill. The OPNsense bootstrap decision
+rejected exactly the mechanism — a seeded config.xml — that the SPIKE above just confirmed
+is real, current, and how OPNsense itself recommends scripted deployment. Code written
+against the old boundary before this reversal is recorded would contradict the plan it
+claims to implement, which is what `AGENTS.md` requires this entry to prevent.
+How: [The OPNsense bootstrap is manual, and the boundary is stated in the runbook]
+(#the-opnsense-bootstrap-is-manual-and-the-boundary-is-stated-in-the-runbook) now carries
+a `Replaced by:` line pointing here. [The manual/code boundary is interface assignment
+and addressing, not VLANs](#the-manualcode-boundary-is-interface-assignment-and-addressing-not-vlans)
+is amended, not retracted — its finding that no provider resource assigns or addresses an
+interface still holds, and is the reason the assignment now has to be baked into a
+template rather than typed once; only who performs that step changes. Milestone 9 runs
+before Milestone 8 despite its higher number, because the point is a zero-touch build to
+run the proof on, not a retrofit after it — Milestone 8's own heading says so, and every
+task in it that assumed a manual OPNsense bootstrap (its tasks 1, 4-7) gets revised once
+Milestone 10 exists to replace them, not before.
+Secrets this milestone adds, all generated rather than typed, all living only in the
+gitignored `.env` alongside the guest passwords the earlier secrets decision already put
+there: the OPNsense root password, its API key and secret (only the secret's SHA-512-crypt
+hash reaches the committed `config.xml` template), and the Proxmox host's own root
+password and the two API tokens its first-boot hook mints. None of these are a new
+category of secret under that decision — they extend the same file.
+Rejected: leaving the two superseded decisions unmarked and adding new ones alongside
+them — `AGENTS.md` requires a rejected option to stay rejected until its entry is
+replaced, and the manual bootstrap decision explicitly rejected the mechanism this
+milestone now adopts. Two decisions in the same file giving opposite answers to the same
+question is worse than either answer alone.
