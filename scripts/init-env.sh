@@ -64,6 +64,14 @@ set_var "OPNSENSE_API_SECRET" "${opnsense_api_secret}"
 set_var "PKR_VAR_opnsense_api_secret_hash" \
   "$(openssl passwd -6 -salt "$(gen_salt)" "${opnsense_api_secret}")"
 
+# Proxmox host root password: the plaintext is kept too, unlike OPNsense's —
+# nothing consumes it programmatically, but proxmox/answer.toml only ever
+# gets the hash, and the operator still needs to log in afterward somehow.
+proxmox_root_password="$(gen_secret)"
+set_var "PROXMOX_ROOT_PASSWORD" "${proxmox_root_password}"
+set_var "PROXMOX_ROOT_PASSWORD_HASH" \
+  "$(openssl passwd -6 -salt "$(gen_salt)" "${proxmox_root_password}")"
+
 # Proxmox endpoint, URI and API tokens are deliberately left as placeholders:
 # the endpoint/URI depend on a host that doesn't exist yet, and the two
 # tokens are minted by the host's own first-boot hook (task 9), not by this

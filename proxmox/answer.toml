@@ -1,0 +1,38 @@
+# Rendered by scripts/prepare-proxmox-iso.sh (envsubst-style ${VAR} placeholders
+# from .env) and embedded into a prepared installer ISO by
+# proxmox-auto-install-assistant — see the zero-touch decision in PLAN.md. The
+# rendered file and the prepared ISO are both gitignored: this template is the
+# only copy that ever reaches git, and it holds a password hash, not the
+# plaintext.
+#
+# Schema: https://pve.proxmox.com/wiki/Automated_Installation
+
+[global]
+keyboard             = "de"
+country              = "de"
+fqdn                 = "pve.silab.internal"
+mailto               = "admin@silab.internal"
+timezone             = "Europe/Berlin"
+root-password-hashed = "${PROXMOX_ROOT_PASSWORD_HASH}"
+
+[network]
+# Static, per docs/network-design.md's Management VLAN address for the
+# Proxmox host. DNS is a placeholder public resolver, not DC01 — DC01 doesn't
+# exist yet at install time, and whether the host even sits on this address
+# directly or behind a router depends on Milestone 8 task 3's still-open
+# public-WAN question. Confirm both against the real rented server before use.
+source  = "from-answer"
+cidr    = "10.10.10.2/24"
+gateway = "10.10.10.1"
+dns     = "9.9.9.9"
+
+[disk-setup]
+filesystem = "ext4"
+# "sda" is a placeholder — the real rented server's boot-disk device name is
+# unconfirmed until Milestone 8 task 1 picks a specific product. Adjust
+# scripts/prepare-proxmox-iso.sh's rendering or this file directly once known.
+disk-list = ["sda"]
+
+[first-boot]
+source   = "from-iso"
+ordering = "fully-up"

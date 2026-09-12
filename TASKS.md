@@ -2113,7 +2113,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    in both roots, `check-design-consistency.py` and `check-markdown-links.py`
    both still pass.
 
-9. [ ] Make the Proxmox host install itself
+9. [x] Make the Proxmox host install itself
    **What:** a templated `proxmox/answer.toml`, the step that prepares an installer ISO
    from it, and a first-boot hook that creates the API tokens Terraform and Packer need.
    **Why:** runbook section 1 is the one layer with no automation at all, and on
@@ -2128,11 +2128,52 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    real secret; a prepared ISO or rendered answer file cannot be committed, confirmed with
    `git check-ignore`; the hook creates two distinct tokens.
 
-   9.1. [ ] `proxmox/answer.toml` template and the ISO preparation step
-   9.2. [ ] First-boot hook creating both tokens
-   9.3. [ ] Gitignore the prepared ISO and any rendered answer file
+   9.1. [x] `proxmox/answer.toml` template and the ISO preparation step
+   9.2. [x] First-boot hook creating both tokens
+   9.3. [x] Gitignore the prepared ISO and any rendered answer file
 
-   Notes:
+   Notes: pulled the real `answer.toml` schema from the official Proxmox wiki
+   rather than trusting the two community examples found first, both of which
+   used the older `root_password` (underscore) spelling — the current schema is
+   kebab-case (`root-password-hashed`), confirmed by fetching the wiki page in
+   full. `[network]` is static (`from-answer`, `10.10.10.2/24`) per
+   `docs/network-design.md`, with DNS pointing at a placeholder public
+   resolver rather than DC01 — DC01 doesn't exist yet at Proxmox-install time,
+   and whether the host even sits on this address directly depends on
+   Milestone 8 task 3's still-open public-WAN question; flagged in the file
+   rather than guessed at. `disk-list = ["sda"]` is a placeholder too, for the
+   same "no specific rented product chosen yet" reason.
+
+   No `templatefile()` here — this render happens outside Packer entirely
+   (`scripts/prepare-proxmox-iso.sh`), so plain `sed` on the one placeholder
+   does the job without a new dependency, consistent with `init-env.sh`'s own
+   style. A real gap surfaced while writing the render script: unlike
+   OPNsense's API secret, nothing programmatic ever needs the Proxmox root
+   password's *plaintext* — only its hash goes into `answer.toml` — but an
+   operator still has to log in with it afterward. `init-env.sh` (from task 5)
+   now also writes `PROXMOX_ROOT_PASSWORD` alongside the hash, for that reason
+   alone; nothing reads it back programmatically.
+
+   The first-boot hook mints both tokens via `pvesh create
+   /access/users/root@pam/token/<id> --privsep 0` (root-equivalent, matching
+   how `example.env`'s tokens were already both `root@pam`-scoped, not a new
+   inconsistency) and writes lines shaped exactly like `.env`'s own variable
+   names to `/root/proxmox-api-tokens.txt`, so the operator can paste them in
+   directly. `--output-format json` piped through `grep -oP` avoids a `jq`
+   dependency this minimal a host script shouldn't need. Confirmed the
+   ordering choice against the real Proxmox wiki: `fully-up` (the default) is
+   exactly the point `pvesh` is documented as available, not a guess.
+
+   Confirmed real, not assumed, everywhere it could be: `shellcheck` is clean
+   on both new scripts; the render step was actually run end to end against a
+   stubbed `proxmox-auto-install-assistant` (this machine can't install the
+   real one — no host, same limitation as `packer build`/`terraform apply`)
+   and the rendered file parsed as valid TOML via Python's `tomllib`, with the
+   right values in the right sections; `git check-ignore` confirms the
+   rendered answer file and any `proxmox/*.iso` are ignored while
+   `proxmox/answer.toml` itself and the two scripts are not;
+   `check-design-consistency.py` and `check-markdown-links.py` both still
+   pass.
 
 10. [ ] Extend CI to cover everything this milestone added
     **What:** `shellcheck` on `scripts/`, the design consistency check widened to the new
