@@ -361,3 +361,25 @@ Rejected: waiting for a future provider version that might add interface assignm
 pins the milestone to an upstream release with no date freely chosen by this project.
 Rejected: treating the whole `opnsense/` root as not worth it since it can't reach 100%
 automation — the DHCP and firewall layer is real, substantial code either way.
+
+### Guests reach their first address by DHCP reservation, then PowerShell makes it static
+
+Why: a freshly cloned guest has no address — the templates ship without one on purpose,
+since identity is set at first boot. But Terraform has to reach the guest over WinRM to
+do that setting, and the Servers VLAN deliberately has no DHCP. Without something
+closing that loop, DC01 boots unreachable and the whole handoff to `powershell/` has
+nowhere to start.
+How: Terraform pins an explicit MAC on every guest NIC, and OPNsense hands that MAC
+exactly the address the static table already documents. The Servers VLAN scope has no
+dynamic pool at all — only reservations — so an unknown machine still gets nothing, and
+an address cannot drift away from `docs/network-design.md`. PowerShell then writes the
+same address statically, because a domain controller must not depend on DHCP to come
+back after a reboot. The reservation is a bootstrap crutch, not the running state.
+Rejected: cloudbase-init in the image — the standard answer, and it removes the DHCP
+dependency entirely, but it reopens a finished Packer milestone, forces a v2 template,
+and adds software to an image whose minimalism is itself a decision.
+Rejected: generating a per-VM config ISO that a baked-in scheduled task reads — self
+contained, but it is custom machinery and still needs an image change for the task.
+Rejected: leaving the Servers VLAN with a normal dynamic pool — simpler, but it puts two
+authorities on the same addresses and invites exactly the drift the no-DHCP rule was
+written to prevent.
