@@ -66,6 +66,23 @@ No "latest" symlink or unversioned VirtIO filename — the exact version in the
 filename is what lets a rebuild months later use precisely what the original build
 used, per the same pinning discipline as every other tool in this repo.
 
+## Guest VMIDs
+
+`<VLAN ID>` × `10` + a per-VLAN sequence number, so the ID itself says which VLAN
+the guest is on — clear of the `9000`–`9099` template range above.
+
+| Host | VLAN | VMID |
+| --- | --- | --- |
+| OPNsense | 10 (Management) | 101 |
+| DC01 | 20 (Servers) | 201 |
+| SRV01 | 20 (Servers) | 202 |
+| CL01 | 30 (Clients) | 301 |
+
+OPNsense sits at Management even though it routes every VLAN — that's the one
+address it has that isn't itself a gateway, per the static address table in
+`docs/network-design.md`. A second host on Servers or Clients continues the same
+VLAN's sequence (`203`, `302`, …), never restarting from a round number.
+
 ## Formatting and pinning (CI-enforced)
 
 - `terraform fmt` and `packer fmt` clean at all times, in `terraform/`, `opnsense/`

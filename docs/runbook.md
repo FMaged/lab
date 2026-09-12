@@ -45,8 +45,61 @@ moment a real build runs.
 
 ## 3. OPNsense setup
 
-*(Milestone 4 — not started. Will cover: applying the VLAN/interface/DHCP/firewall
-config decided by the Milestone 1 SPIKE, and verifying each VLAN routes.)*
+**Never executed.** Every step in 3a and 3b is written from the design docs and
+validated where a validator exists; none of it has run against a real firewall.
+See the execution status decision in PLAN.md.
+
+### 3a. Manual bootstrap
+
+The manual/code boundary is interface assignment and addressing, not VLANs — see
+the decision in PLAN.md. Concretely, that means this half happens in two passes:
+some of it before `terraform apply` creates the VLAN devices, the rest after.
+
+**Before `terraform apply` for `terraform/vm-opnsense.tf`:**
+
+1. `terraform apply` (root: `terraform/`) creates the VM. Attach the OPNsense
+   installation ISO to the `local` datastore first, as `local:iso/opnsense.iso`
+   — the VM won't boot without it.
+
+**After the VM exists, before any Terraform touches `opnsense/`:**
+
+2. Boot the VM and run the OPNsense installer from console (ZFS is fine for a
+   lab; set a root password you'll actually remember, since it's what the web
+   UI login uses too).
+3. At the console menu, **Assign interfaces** (option 1): assign the WAN-bridge
+   NIC as `wan` and note the trunk-bridge NIC's device name (e.g. `vtnet1`) —
+   it stays unassigned for now; it's the VLAN devices Terraform creates from it
+   in task 8 that get assigned, not the raw NIC itself.
+4. Confirm WAN picked up a DHCP lease from the home router (console menu or
+   Interfaces > WAN in the web UI) — no action needed if it did.
+5. In the web UI: **System > Settings > Administration**, enable the API.
+   **System > Access > Users**, create (or use an existing account) an API
+   key/secret pair. This is the literal bootstrapping problem the decision in
+   PLAN.md describes — nothing in `opnsense/` can run before this exists.
+
+**After `terraform apply` for `opnsense/`'s VLAN devices exist (task 8):**
+
+6. **Interfaces > Assignments**: assign each of the three new VLAN devices
+   (`vtnet1.10`, `vtnet1.20`, `vtnet1.30`, or whatever the tag suffix renders
+   as) to its own logical interface, and give each the static address from
+   `docs/network-design.md`'s address table — `10.10.10.1/24`, `10.10.20.1/24`,
+   `10.10.30.1/24`. Naming the assigned interfaces `MGMT`/`SERVERS`/`CLIENTS`
+   (rather than the default `OPT1`/`OPT2`/`OPT3`) makes every later step, and
+   every firewall rule, far easier to read.
+
+Environment variables the code half (3b) expects to already be set:
+
+| Variable | Used by | Value |
+| --- | --- | --- |
+| `PROXMOX_VE_ENDPOINT` | `terraform/` | the Proxmox API URL |
+| `PROXMOX_VE_API_TOKEN` | `terraform/` | the Proxmox API token from step above (Milestone 4's own bootstrap, not this one) |
+| `OPNSENSE_API_KEY` | `opnsense/` | the key from step 5 |
+| `OPNSENSE_API_SECRET` | `opnsense/` | the secret from step 5 |
+
+### 3b. Code — VLANs, DHCP, firewall
+
+*(Task 10 — fills in once tasks 7–9 land: the two-stage apply order for
+`terraform/` and `opnsense/`, and how to verify each VLAN actually routes.)*
 
 ## 4. DC01 — domain controller
 

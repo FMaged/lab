@@ -535,7 +535,7 @@ under `terraform apply`. This milestone also scaffolds the `terraform/` root, be
 OPNsense VM is the first resource to land in it. Ends when both Terraform roots validate
 green in CI against real resources — no host exists to apply them to.
 
-1. [ ] SPIKE: where exactly does the manual/code boundary fall (max 2h)
+1. [x] SPIKE: where exactly does the manual/code boundary fall (max 2h)
    **Why:** the bootstrap decision in PLAN.md fixes that there is a manual half, but not
    its size. Interface assignment and interface addressing are core OPNsense settings and
    may not be exposed as provider resources at all, while VLAN creation, DHCP and rules
@@ -545,8 +545,14 @@ green in CI against real resources — no host exists to apply them to.
    version, not the latest docs, and sort every item in `docs/network-design.md` into
    manual or code. Note anything the provider claims to support but marks experimental.
    Output: one decision entry in PLAN.md, and the split that task 5 writes down
+   Notes: checked the actual v0.26.0 docs/resources listing (47 files) rather than the
+   provider's latest docs. Confirmed: opnsense_interfaces_vlan (tag/parent/device) plus
+   full Kea DHCP and firewall/NAT/alias coverage exist; nothing assigns a raw interface
+   to a logical slot or sets its IP (interfaces_vip is CARP-style VIPs, not primary
+   addressing) — that stays manual, done *after* Terraform creates the VLAN devices, not
+   before. Decision in PLAN.md.
 
-2. [ ] Write the firewall policy into docs/network-design.md
+2. [x] Write the firewall policy into docs/network-design.md
    **What:** a rule table — source, destination, service, and the reason the rule exists —
    plus the default-deny stance and the outbound NAT behaviour.
    **Why:** PLAN.md requires least privilege with a reason on every rule, and the
@@ -560,13 +566,16 @@ green in CI against real resources — no host exists to apply them to.
    as a destination in zero rules. Clients reach DC01 on DNS, Kerberos, LDAP, SMB and time
    and on nothing else. Default-deny and the outbound NAT behaviour are each stated.
 
-   2.1. [ ] Client-to-DC service rules, named per service
-   2.2. [ ] Management isolation and the default-deny statement
-   2.3. [ ] Outbound internet access per VLAN, and the NAT rule
+   2.1. [x] Client-to-DC service rules, named per service
+   2.2. [x] Management isolation and the default-deny statement
+   2.3. [x] Outbound internet access per VLAN, and the NAT rule
 
-   Notes:
+   Notes: 5 inter-VLAN rules (Clients->DC01 only), 5 outbound rules (one set per
+   VLAN, Clients get no direct DNS/NTP since both go through DC01/AD instead), one
+   NAT statement covering all three subnets. SRV01 isn't a destination anywhere
+   yet — nothing in the current topology needs to reach it directly.
 
-3. [ ] Assign guest VMIDs in docs/conventions.md
+3. [x] Assign guest VMIDs in docs/conventions.md
    **What:** a fixed VMID for OPNsense, DC01, SRV01 and CL01, in a range clear of the
    `9000`–`9099` template block.
    **Why:** the `terraform-proxmox` skill requires every VM to carry an explicit `vm_id`
@@ -577,9 +586,11 @@ green in CI against real resources — no host exists to apply them to.
    **Accept:** four VMIDs listed — OPNsense, DC01, SRV01, CL01 — none inside `9000`–`9099`,
    none repeated, each one readable back to its VLAN.
 
-   Notes:
+   Notes: `<VLAN ID> x 10 + sequence>` — OPNsense 101, DC01 201, SRV01 202, CL01
+   301. OPNsense placed on Management (10) since that's the one address it has
+   that isn't a gateway for something, per network-design.md's address table.
 
-4. [ ] Scaffold the terraform/ root
+4. [x] Scaffold the terraform/ root
    **What:** `providers.tf`, `variables.tf` and a committed `example.tfvars` for the
    bpg/proxmox root, which currently holds only a version pin.
    **Why:** the OPNsense VM lands here per the decision in PLAN.md, and Milestone 5 adds
@@ -594,9 +605,20 @@ green in CI against real resources — no host exists to apply them to.
    variable carries `sensitive = true`. `example.tfvars` lists every variable with a
    placeholder value.
 
+   Notes: confirmed real with a locally installed terraform (fmt clean, init and
+   validate both green). No `sensitive = true` anywhere — this root's variables
+   (node, two datastores, three VLAN IDs) are all genuinely non-secret; the
+   `provider` block has an empty body and picks up `PROXMOX_VE_ENDPOINT` /
+   `PROXMOX_VE_API_TOKEN` natively, so there's no endpoint/token variable to mark
+   sensitive at all. Guest-level secrets (WinRM passwords) arrive in Milestone 5
+   with the guests that actually need them. `.terraform.lock.hcl` committed too,
+   on Terraform's own recommendation — same pinning discipline as everything
+   else. Added `!example.tfvars` to `.gitignore`, the same trap `*.pkrvars.hcl`
+   had.
+
    Notes:
 
-5. [ ] Write terraform/vm-opnsense.tf
+5. [x] Write terraform/vm-opnsense.tf
    **What:** the firewall VM — two NICs, one on the WAN bridge and one on the VLAN trunk,
    with disk, CPU and memory from `docs/hardware.md`, its VMID from task 3 and the `lab`
    and `role-firewall` tags.
@@ -610,9 +632,17 @@ green in CI against real resources — no host exists to apply them to.
    comment saying why. `vm_id` matches what task 3 assigned. CPU, memory and disk match
    `docs/hardware.md`. Tags `lab` and `role-firewall` both present.
 
+   Notes: fmt+validate both real and green (terraform CLI installed locally now).
+   Added two variables beyond task 4's set — proxmox_bridge_wan/_trunk — since
+   docs/hardware.md never named actual bridge names (it only describes the two
+   viable NIC layouts), so they're configurable rather than hardcoded. Set
+   agent.enabled = false deliberately: OPNsense/FreeBSD has no qemu-guest-agent
+   installed by default, so leaving it on would make Proxmox wait on a ping that
+   never comes.
+
    Notes:
 
-6. [ ] Write the manual bootstrap half of the runbook
+6. [x] Write the manual bootstrap half of the runbook
    **What:** runbook section 3a — install from ISO, assign WAN and the three VLAN
    interfaces, set their addresses from the static table, enable the API and create a key.
    **Why:** PLAN.md makes this boundary explicit rather than apologetic, and this section
@@ -624,9 +654,15 @@ green in CI against real resources — no host exists to apply them to.
    it matches `docs/network-design.md`. The section ends with the exact env var names
    section 3b consumes.
 
-   Notes:
+   Notes: split into two explicit passes, not one list — steps 1-5 happen before
+   the VLAN devices exist (VM boot, install, WAN assignment, API enablement),
+   step 6 happens after task 8's terraform apply creates them (assignment +
+   static addressing). Named the assigned interfaces MGMT/SERVERS/CLIENTS rather
+   than leaving OPT1-3, since every later reference reads better that way. Also
+   renamed section 3's remaining placeholder to "3b" so 3a/3b map directly to the
+   PLAN.md decision's two halves.
 
-7. [ ] Write the opnsense/ provider configuration and variables
+7. [x] Write the opnsense/ provider configuration and variables
    **What:** `opnsense/provider.tf` and `opnsense/variables.tf` — the firewall URL and the
    API credentials read from `OPNSENSE_API_KEY` and `OPNSENSE_API_SECRET`.
    **Why:** this root has its own state and lifecycle per its skill, so it needs its own
@@ -638,9 +674,14 @@ green in CI against real resources — no host exists to apply them to.
    `opnsense/`. URL and credentials come from variables only, no literal in any committed
    file. `versions.tf` still pins `0.26.0`.
 
-   Notes:
+   Notes: confirmed the provider natively reads OPNSENSE_URI/OPNSENSE_API_KEY/
+   OPNSENSE_API_SECRET (a third var beyond what the task text named), so
+   `provider.tf` has an empty body, same pattern as `terraform/providers.tf`.
+   `variables.tf` also declares trunk_parent_interface — task 8 needs it as the
+   VLAN parent, and its value is exactly what runbook 3a step 3 has someone note
+   by hand. Real fmt/init/validate all green.
 
-8. [ ] Write opnsense/interfaces.tf and opnsense/dhcp.tf
+8. [x] Write opnsense/interfaces.tf and opnsense/dhcp.tf
    **What:** whichever VLAN interface resources the spike found to be code-side, and a Kea
    DHCP scope serving the Clients VLAN only, pool `10.10.30.100`–`10.10.30.200`.
    **Why:** DHCP on VLAN 30 is what lets CL01 prove DHCP and domain join together, and
@@ -655,13 +696,22 @@ green in CI against real resources — no host exists to apply them to.
    `10.10.30.100`–`10.10.30.200`, DNS option `10.10.20.10`. VLANs 10 and 20 have no scope.
    The DNS paragraph in the design doc agrees, in the same commit.
 
-   8.1. [ ] VLAN interfaces, matching the design exactly
-   8.2. [ ] Kea scope on VLAN 30 with DC01 as the DNS option
-   8.3. [ ] Reconcile the DNS paragraph in docs/network-design.md
+   8.1. [x] VLAN interfaces, matching the design exactly
+   8.2. [x] Kea scope on VLAN 30 with DC01 as the DNS option
+   8.3. [x] Reconcile the DNS paragraph in docs/network-design.md
+
+   Notes: opnsense_kea_dhcpv4_subnet is subnet-based, not interface-referencing
+   — no cross-reference to the VLAN resources needed, just the matching CIDR.
+   Real fmt/validate both green. DNS paragraph now distinguishes DC01/SRV01
+   (static, PowerShell sets DNS explicitly) from CL01 (DHCP, gets DNS from the
+   Kea scope's dns_servers option instead) — the old wording implied every host
+   worked the same way, which stopped being true the moment DHCP existed. Left
+   an open question in a comment: whether Kea also needs a manual per-interface
+   enable toggle beyond what's in this file is unconfirmed until the proof run.
 
    Notes:
 
-9. [ ] Write opnsense/firewall.tf
+9. [x] Write opnsense/firewall.tf
    **What:** the aliases, the least-privilege rules from task 2, and outbound NAT for the
    three lab subnets.
    **Why:** this is the milestone's actual content and the part of the project that
@@ -674,11 +724,23 @@ green in CI against real resources — no host exists to apply them to.
    Every rule in the task-2 table appears exactly once, and no rule appears that is not in
    that table. The file is in evaluation order and says so at the top.
 
-   9.1. [ ] Aliases for hosts and service groups
-   9.2. [ ] Filter rules, in evaluation order, each with a reason
-   9.3. [ ] Outbound NAT to the WAN uplink
+   9.1. [x] Aliases for hosts and service groups
+   9.2. [x] Filter rules, in evaluation order, each with a reason
+   9.3. [x] Outbound NAT to the WAN uplink
 
-   Notes:
+   Notes: 12 filter resources — 7 inter-VLAN (DNS and Kerberos each split into a
+   TCP and a UDP rule, so the 5 client-to-DC01 services in the table become 7
+   rules) plus 5 outbound. One host alias (dc01), one network alias
+   (lab_networks, feeds the single NAT rule), via `opnsense_firewall_nat` (the
+   "Outbound" table specifically — separate resources exist for port-forward
+   and 1:1 NAT, not used here). Interface keys
+   for each VLAN (opt1/opt2/opt3) are variables, not literals — genuinely
+   unconfirmed until runbook 3a step 6 actually assigns them. Caught and fixed a
+   real bug while writing this: an early draft interpolated
+   `"${var.network_vlan_clients}0.0/24"` (renders as the wrong string) instead
+   of building the subnet properly — replaced with three `locals` derived from
+   the VLAN ID variables, used everywhere instead of hand-typed subnet
+   literals. Real fmt/validate both green after the fix.
 
 10. [ ] Fill in the code half of the runbook and confirm CI is green
     **What:** runbook section 3b — the environment variables, the apply order for the two
