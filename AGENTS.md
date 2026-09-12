@@ -66,6 +66,12 @@ this project gets.
 - PowerShell is Windows PowerShell 5.1 only. The global `powershell` skill covers style;
   the rule on top of it here is that every script is idempotent — clones are provisioned by
   running them at first boot, and a failed run is retried, not hand-fixed.
+- **The guest drives itself across reboots.** Terraform invokes one entry point per guest
+  and stops. Renaming a host and promoting a domain controller both reboot, so each phase
+  writes a marker before the call that triggers the reboot and a scheduled task resumes the
+  next phase on boot. Never add a second `remote-exec` to Terraform to work around a
+  reboot — see the decision in `PLAN.md`. Phases run as SYSTEM after a reboot, so log to
+  `C:\ProgramData`, never a user profile.
 - Per-layer conventions live in `.claude/skills/`: `terraform-proxmox`,
   `terraform-opnsense`, `packer-windows`, `github-actions-ci`. Read the one for the layer
   being touched.
