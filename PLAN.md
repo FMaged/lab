@@ -78,6 +78,7 @@ status decision below.
 | 30 | [The repository stays in English throughout](#the-repository-stays-in-english-throughout) |
 | 31 | [The reader-facing surface is a narrative walkthrough plus an explicit limitations section](#the-reader-facing-surface-is-a-narrative-walkthrough-plus-an-explicit-limitations-section) |
 | 32 | [Every credential lives in one gitignored .env at the repository root](#every-credential-lives-in-one-gitignored-env-at-the-repository-root) |
+| 33 | [OPNsense ships as a Packer template, configured via its own live-image importer](#opnsense-ships-as-a-packer-template-configured-via-its-own-live-image-importer) |
 
 ### Topology is domain controller, member server, client and firewall
 
@@ -543,3 +544,56 @@ anyone.
 Rejected: one `.env` per layer — a smaller blast radius per file, but the Proxmox
 endpoint and the local administrator password are shared between layers and would have
 to be written twice, which is how two copies drift apart.
+
+### OPNsense ships as a Packer template, configured via its own live-image importer
+
+Why: researched live (2026-09-12) because the manual/code boundary decision below found
+no API to assign or address an interface — but that is a fact about the *running* REST
+API, not about the installer, and the installer turns out to have a real, documented
+route around it. OPNsense's live image looks for a second FAT/FAT32-formatted volume
+carrying an unencrypted `/conf/config.xml`; at "Press any key to start the configuration
+importer" it loads that file — interfaces assigned, VLAN devices created, the API
+enabled, a user's key already present — before the installer ever touches the target
+disk, so the installed system inherits it whole. This is OPNsense's own mechanism for
+scripted and appliance deployment, not a workaround improvised for this project, and its
+own issue tracker describes it in exactly those terms.
+The remaining install steps — keymap, filesystem choice, disk selection, the "Last
+Chance!" format confirmation, swap, root password, reboot — are a linear `bsdinstall`
+dialog sequence with no branching once the target disk is fixed to one device, the same
+shape of keystroke automation `boot_command` already drives for both Windows answer
+files, just against TUI dialogs instead of an XML file.
+API keys live in `config.xml` as a plaintext `<key>` and a SHA-512-crypt (`$6$...`)
+`<secret>` — the identical hash format `passwd` itself uses — so both the real secret and
+its hash can be generated offline in `scripts/init-env.sh`, with only the hash ever
+reaching a committed template.
+Confirmed: `additional_iso_files`/`boot_command` already drive this exact shape of
+installer automation twice, in `windows-server-2025.pkr.hcl` and `windows-11.pkr.hcl`;
+the config-importer feature is real, current, and documented for unencrypted files; the
+API secret's hash format is real, cross-checked against a live `config.xml` example, not
+assumed from the passwd-hashing precedent alone.
+Residual unknown, left for task 7 and the Milestone 8 proof run: OPNsense's own docs
+describe the importer reading a FAT/FAT32 *USB* drive specifically, while Packer's
+`additional_iso_files` produces an ISO9660 disc — whether the importer's device scan
+also picks up an ISO9660 volume, or needs a small raw FAT32 disk image attached as an
+extra virtual disk instead, is unconfirmed until there is a live image to test against.
+Changes task 7's implementation only, not this decision. FreeBSD's `vtnet` interface
+naming is PCI-slot order, confirmed stable — but only as long as Terraform's clone
+declares the same two `network_device` blocks in the same order the template was built
+with; that is a real constraint task 8 has to hold, not a risk to design around.
+How: `packer/opnsense.pkr.hcl` drives the installer with `boot_command`;
+`packer/files/config.xml` (task 6) carries the interface/VLAN/API configuration with
+placeholders substituted from `PKR_VAR_*` at build time; a provisioner resets the
+OPNsense root password to the real secret after install, the same rotate-after-build
+pattern `rotate-admin-password.ps1` already uses for the Windows images, since the
+config-importer route still needs a build-time bootstrap password to get through the
+installer's own prompt.
+Rejected: reproducing the configuration by sending keystrokes into OPNsense's post-install
+console setup wizard (the LAN/WAN/OPT interface-name prompts) instead of the importer —
+that wizard only assigns interfaces to physical/`vtnet` devices, has no path to create
+VLAN devices or enable the API, and would still need a second automation mechanism for
+everything it cannot reach.
+Rejected: configuring OPNsense entirely after boot over SSH with a provisioner script —
+works, but reimplements `config.xml` editing as ad hoc shell commands against a schema
+this project already has full Terraform-resource coverage for (Milestone 4). The importer
+route reuses `opnsense/`'s existing resources for everything the API can reach and only
+needs a template for what only the installer can set.
