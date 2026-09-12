@@ -1292,7 +1292,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    never gained an addressing phase at all - it stays on DHCP permanently
    per `docs/network-design.md` - so its join is phase 1, not phase 2.
 
-8. [ ] Write the health check script
+8. [x] Write the health check script
    **What:** `powershell/Test-SILab.ps1` — a read-only check that the forest, OU tree,
    groups, GPO links and both member joins are in the state the design documents describe,
    printing a pass or fail line per item.
@@ -1305,7 +1305,17 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    check maps to a specific row in `docs/ad-design.md` or `docs/network-design.md`; it
    exits non-zero when any check fails.
 
-   Notes:
+   Notes: one `Test-SILabCheck` wrapper (takes a description and a
+   scriptblock, prints `[PASS]`/`[FAIL]`, tracks a failure count) drives 15
+   checks total: forest/domain name, NetBIOS name, domain and forest
+   functional level, the site rename, all 7 OU tree nodes, both groups
+   (name, category, scope), all 3 GPOs (existence and link target), and
+   both member joins (computer object present in its role's OU). Every
+   cmdlet used is a `Get-*` - confirmed by re-reading the file rather than
+   just asserting it, since this is the one script whose whole purpose is
+   being safe to run against a live domain. Meant to run from DC01 (or any
+   domain member with RSAT), not from a specific guest's Bootstrap script -
+   it takes no parameters and reads the domain fresh each time.
 
 9. [ ] Complete runbook sections 4 and 5
    **What:** the remaining half of the domain controller and member sections — running the
