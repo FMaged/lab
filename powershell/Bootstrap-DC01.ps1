@@ -2,19 +2,23 @@
 [CmdletBinding()]
 # All three parameters arrive as plain strings because Terraform passes
 # command-line arguments and this script cannot receive a SecureString
-# directly (see the credential decision in PLAN.md). LocalAdminPassword and
-# DomainAdminPassword are never used by DC01 - the local admin password only
-# ever authenticates Terraform's own WinRM connection, and DC01 has no domain
-# to join - but are declared anyway because every guest's Bootstrap script
+# directly (see the credential decision in PLAN.md). LocalAdminPassword is
+# never used by DC01 - it only ever authenticates Terraform's own WinRM
+# connection - but is declared anyway because every guest's Bootstrap script
 # takes the same fixed parameters (AGENTS.md); there is no per-guest
-# parameter list to trim these from. SafeModeAdminPassword does not reach
-# Terraform's invocation of this script yet - task 11 wires it in.
+# parameter list to trim it from. DomainAdminPassword IS used, despite DC01
+# having no domain to join itself: a new forest's local Administrator account
+# becomes its domain Administrator account, carrying over whatever password
+# it had at promotion time, so phase 2 resets the local account to this
+# password first - it is how SRV01 and CL01 (task 7) end up able to
+# authenticate their own domain join as 'Administrator' with this same
+# password. SafeModeAdminPassword does not reach Terraform's invocation of
+# this script yet - task 11 wires it in.
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'LocalAdminPassword', Justification = 'Terraform passes this as a plain command-line argument; see the credential decision in PLAN.md.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'DomainAdminPassword', Justification = 'Terraform passes this as a plain command-line argument; see the credential decision in PLAN.md.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'SafeModeAdminPassword', Justification = 'Terraform passes this as a plain command-line argument; see the credential decision in PLAN.md.')]
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '', Justification = 'The recovery password arrives as a plain command-line argument and is converted to a SecureString on first use; see the credential decision in PLAN.md.')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '', Justification = 'These passwords arrive as plain command-line arguments and are converted to a SecureString on first use; see the credential decision in PLAN.md.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'LocalAdminPassword', Justification = 'Every guest Bootstrap script takes the same fixed parameters; DC01 does not need this one.')]
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'DomainAdminPassword', Justification = 'Every guest Bootstrap script takes the same fixed parameters; DC01 does not need this one.')]
 param(
     [string]$LocalAdminPassword,
     [string]$DomainAdminPassword,
@@ -308,6 +312,16 @@ try {
 
     if (-not (Test-SILabPhaseComplete -Number 2)) {
         Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools | Out-Null
+
+        # A new forest's local Administrator account becomes the domain
+        # Administrator account, carrying over whatever password it has right
+        # now - so this is set to DomainAdminPassword *before* promoting,
+        # rather than trying to change the domain account's password
+        # afterwards (which would need this same parameter to survive
+        # Install-ADDSForest's reboot, and nothing may persist a credential to
+        # disk to make that survive). See task 7, which is what this feeds.
+        $secureDomainAdminPassword = ConvertTo-SecureString -String $DomainAdminPassword -AsPlainText -Force
+        Set-LocalUser -Name 'Administrator' -Password $secureDomainAdminPassword
 
         # Converted to a SecureString on the first line that touches it -
         # Terraform passes it as a command-line argument, so the script cannot

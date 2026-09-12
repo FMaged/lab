@@ -1247,7 +1247,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    the setting, not a specific file, and this project has no wallpaper
    asset of its own.
 
-7. [ ] Write the domain join phase for SRV01 and CL01
+7. [x] Write the domain join phase for SRV01 and CL01
    **What:** the phase that joins a member to `ad.silab.internal` and places its computer
    object in `Computers/Servers` or `Computers/Workstations` according to its role.
    **Why:** `docs/ad-design.md` requires SRV01 to land in `Computers/Servers` and CL01 in
@@ -1266,7 +1266,31 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    or transcript; no phase after the join takes a credential; re-running on an
    already-joined machine is a no-op.
 
-   Notes:
+   Notes: writing this surfaced a real gap in task 4's already-committed
+   code, fixed here rather than left for later - DC01 never actually did
+   anything with `DomainAdminPassword`, but SRV01/CL01 need to authenticate
+   their join as `Administrator` with that exact password, and a brand-new
+   forest's domain Administrator account starts out with whatever password
+   the local Administrator account had *at promotion time*, not a value set
+   afterwards. So DC01's promotion phase (task 4) now resets its local
+   Administrator's password to `DomainAdminPassword` immediately before
+   calling Install-ADDSForest, which is the only point where changing it is
+   both possible (the domain does not exist yet to change a domain account
+   directly) and safe (still the same invocation Terraform's argument
+   arrived in, so nothing has to survive a reboot). Removed the
+   `PSReviewUnusedParameter` suppression for `DomainAdminPassword` on DC01
+   accordingly, since it is genuinely used now. `Wait-SILabDomainController`
+   (LDAP port 389 against `DC01.ad.silab.internal`, 15s poll, 900s timeout)
+   is duplicated identically in both Bootstrap-SRV01.ps1 and the new
+   Bootstrap-CL01.ps1 rather than added to SILab.psm1 - task 2 scoped that
+   module to logging/phase/resume-task concerns only, and this is a small
+   enough function that two copies read better than a third caller
+   justifying a shared one. Both scripts use `Add-Computer -NewName` to join
+   and rename in one supported operation (no separate Rename-Computer, no
+   role parameter to branch on - each script's target OU is a fixed
+   string), landing the computer object directly in its target OU. CL01
+   never gained an addressing phase at all - it stays on DHCP permanently
+   per `docs/network-design.md` - so its join is phase 1, not phase 2.
 
 8. [ ] Write the health check script
    **What:** `powershell/Test-SILab.ps1` — a read-only check that the forest, OU tree,
