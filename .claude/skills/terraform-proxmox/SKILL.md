@@ -54,6 +54,9 @@ secret is marked `sensitive = true`. Resource and variable naming and VM tags fo
 
 - One `proxmox_virtual_environment_vm` per host, with an explicit `vm_id` from the
   address table so a rebuild lands on the same ID every time.
+- Every Windows guest pins an explicit MAC address, taken from `docs/conventions.md`.
+  A generated MAC would change on rebuild and silently miss its DHCP reservation, leaving
+  the guest unreachable with nothing in a plan or a validate run to indicate why.
 - Every `network_device` gets an explicit `vlan_id`. An untagged NIC is a bug, not a
   default — with exactly one exception: the OPNsense trunk NIC carries VLANs 10, 20 and
   30 tagged and therefore sets no `vlan_id` of its own. It is commented as deliberate in

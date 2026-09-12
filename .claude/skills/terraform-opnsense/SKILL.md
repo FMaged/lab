@@ -38,9 +38,16 @@ invent one here; if the design is wrong, change the design first.
   carries the policy table; this root implements it. A rule that is not in that table
   does not belong here, and a broad allow between VLANs contradicts a decision in
   `PLAN.md`.
-- **DHCP is Kea, and only serves the Clients VLAN** (see `docs/network-design.md`).
-  Management and Servers VLANs get no DHCP resource — their hosts are static and
-  already listed in the address table.
+- **DHCP is Kea, and it serves two VLANs for two different reasons.** The Clients VLAN
+  has a real pool, because CL01 is an ordinary client. The Servers VLAN has a
+  reservation-only scope with no pool at all — it exists solely so a freshly cloned DC01
+  and SRV01 come up reachable for Terraform's WinRM handoff, after which PowerShell makes
+  the address static. See the bootstrap addressing decision in `PLAN.md`. The Management
+  VLAN still gets nothing. A pool on the Servers VLAN is a bug, not an omission.
+- **Reservations key on MACs pinned in `terraform/`.** Address and MAC both come from the
+  design documents — addresses from `docs/network-design.md`, MACs from
+  `docs/conventions.md`. Changing either on one side alone silently breaks the bootstrap
+  in a way no validator will catch.
 
 - **This configuration cannot be applied.** There is no OPNsense instance to reach,
   so `plan` and `apply` are unavailable during development. `terraform validate` with
