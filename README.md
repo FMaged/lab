@@ -28,14 +28,20 @@ Full diagram with addressing: [docs/network-diagram.md](docs/network-diagram.md)
 
 ## Where to start reading
 
-1. [PLAN.md](PLAN.md) — the goal, the stack, and why each major choice was made.
+1. [docs/walkthrough.md](docs/walkthrough.md) — **start here.** One machine, from
+   blank installation media to a domain member with a policy applied, naming the file
+   responsible at each step.
 2. [docs/network-design.md](docs/network-design.md) and
-   [docs/network-diagram.md](docs/network-diagram.md) — the network.
+   [docs/network-diagram.md](docs/network-diagram.md) — VLANs, addressing, DHCP, DNS
+   and the firewall policy.
 3. [docs/ad-design.md](docs/ad-design.md) — the domain: OUs, groups, GPOs.
-4. [docs/hardware.md](docs/hardware.md) — the physical host this runs on.
-5. [docs/runbook.md](docs/runbook.md) — bare metal to a working domain, in order;
-   this is the build log as each milestone lands.
-6. [TASKS.md](TASKS.md) — current progress, milestone by milestone.
+4. [docs/conventions.md](docs/conventions.md) — naming, VM IDs, MACs, template and ISO
+   names, and the branch and commit rules.
+5. [docs/hardware.md](docs/hardware.md) — what a host would need to run this.
+6. [docs/runbook.md](docs/runbook.md) — bare metal to a working domain, in order.
+7. [PLAN.md](PLAN.md) — the goal, the stack, and why each major choice was made,
+   including the options that were rejected.
+8. [TASKS.md](TASKS.md) — current progress, milestone by milestone.
 
 ## Layer index
 
