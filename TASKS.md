@@ -711,7 +711,7 @@ green in CI against real resources — no host exists to apply them to.
 
    Notes:
 
-9. [ ] Write opnsense/firewall.tf
+9. [x] Write opnsense/firewall.tf
    **What:** the aliases, the least-privilege rules from task 2, and outbound NAT for the
    three lab subnets.
    **Why:** this is the milestone's actual content and the part of the project that
@@ -724,11 +724,23 @@ green in CI against real resources — no host exists to apply them to.
    Every rule in the task-2 table appears exactly once, and no rule appears that is not in
    that table. The file is in evaluation order and says so at the top.
 
-   9.1. [ ] Aliases for hosts and service groups
-   9.2. [ ] Filter rules, in evaluation order, each with a reason
-   9.3. [ ] Outbound NAT to the WAN uplink
+   9.1. [x] Aliases for hosts and service groups
+   9.2. [x] Filter rules, in evaluation order, each with a reason
+   9.3. [x] Outbound NAT to the WAN uplink
 
-   Notes:
+   Notes: 12 filter resources — 7 inter-VLAN (DNS and Kerberos each split into a
+   TCP and a UDP rule, so the 5 client-to-DC01 services in the table become 7
+   rules) plus 5 outbound. One host alias (dc01), one network alias
+   (lab_networks, feeds the single NAT rule), via `opnsense_firewall_nat` (the
+   "Outbound" table specifically — separate resources exist for port-forward
+   and 1:1 NAT, not used here). Interface keys
+   for each VLAN (opt1/opt2/opt3) are variables, not literals — genuinely
+   unconfirmed until runbook 3a step 6 actually assigns them. Caught and fixed a
+   real bug while writing this: an early draft interpolated
+   `"${var.network_vlan_clients}0.0/24"` (renders as the wrong string) instead
+   of building the subnet properly — replaced with three `locals` derived from
+   the VLAN ID variables, used everywhere instead of hand-typed subnet
+   literals. Real fmt/validate both green after the fix.
 
 10. [ ] Fill in the code half of the runbook and confirm CI is green
     **What:** runbook section 3b — the environment variables, the apply order for the two

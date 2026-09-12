@@ -21,3 +21,26 @@ variable "network_vlan_clients" {
   description = "VLAN ID for the Clients network — see docs/network-design.md"
   default     = 30
 }
+
+# OPNsense's own key for each assigned interface (e.g. "opt1"), not the VLAN ID.
+# Unconfirmed until runbook section 3a step 6 actually assigns them — "opt1"/
+# "opt2"/"opt3" is OPNsense's usual sequential default, not a verified fact.
+# Update these three the moment the real assignment is known.
+
+variable "opnsense_interface_management" {
+  type        = string
+  description = "OPNsense's assigned-interface key for the Management VLAN — unconfirmed, see above"
+  default     = "opt1"
+}
+
+variable "opnsense_interface_servers" {
+  type        = string
+  description = "OPNsense's assigned-interface key for the Servers VLAN — unconfirmed, see above"
+  default     = "opt2"
+}
+
+variable "opnsense_interface_clients" {
+  type        = string
+  description = "OPNsense's assigned-interface key for the Clients VLAN — unconfirmed, see above"
+  default     = "opt3"
+}
