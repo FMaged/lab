@@ -1020,7 +1020,7 @@ Terraform, so treat it as fixed unless a task says otherwise.
 
 Branch this milestone per `docs/conventions.md`: one branch, one commit per task, one PR.
 
-1. [ ] Fix the stale milestone numbers in docs/ad-design.md
+1. [x] Fix the stale milestone numbers in docs/ad-design.md
    **What:** the closing section refers to "Milestone 5's PowerShell" and "Milestone 6
    must show CL01" — both written before the re-plan renumbered everything.
    **Why:** this document is the spec the whole milestone implements, and a reader
@@ -1032,7 +1032,13 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    heading in `TASKS.md` describes different work; a grep for "Milestone" across `docs/`
    returns only correct references.
 
-   Notes:
+   Notes: the same drift existed in `docs/runbook.md` — section 1 (Proxmox host
+   install) and section 6 (full rebuild) both still said "Milestone 2" / "Milestone
+   7" from before the dropped-host replan; both are Milestone 8 now. Also fixed one
+   more: section 3's "domain verification waits for Milestone 5" conflated DC01
+   existing as a VM (Milestone 5) with the domain actually being up
+   (Milestone 6). `docs/conventions.md`'s and `PLAN.md`'s own "Milestone N"
+   references were checked too and are all still accurate — no change needed there.
 
 2. [ ] Write the shared PowerShell module
    **What:** `powershell/SILab.psm1` — logging to a transcript, the phase marker read and
