@@ -42,9 +42,13 @@ secret is marked `sensitive = true`. Resource and variable naming and VM tags fo
   DHCP and no DNS path. A single blind `apply` of everything is not the intended use.
 
 - **This configuration cannot be applied.** There is no Proxmox host, so `plan` and
-  `apply` are unavailable during development. `terraform validate` with
-  `-backend=false` in CI is the only feedback, and it will not catch a wrong VM ID, a
-  missing template or a bad datastore name. Pin bpg/proxmox to an exact version.
+  `apply` are unavailable during development, possibly ever. `terraform validate` with
+  `-backend=false` is the real check — it will not catch a wrong VM ID, a missing
+  template or a bad datastore name. Pin bpg/proxmox to an exact version.
+- **`fmt`, `init` and `validate` run locally now** — the `terraform` CLI is installed
+  (2026-09-12). Run them before pushing rather than finding out from a red CI run.
+  This doesn't change the point above: `plan`/`apply` still have no host to run
+  against.
 
 ## Conventions
 
@@ -57,8 +61,19 @@ secret is marked `sensitive = true`. Resource and variable naming and VM tags fo
   guest.
 - Read the `plan` before every `apply`. A plan proposing to replace a VM you did not
   intend to touch usually means the base template changed underneath the state.
+- Commit `.terraform.lock.hcl` — Terraform asks for this itself on first `init`, and
+  it's the same "pin everything exactly" discipline as every version constraint in
+  this repo.
 
 ## Gotchas
 
-<!-- Empty until the configuration exists (Milestone 5). Anything that costs more than
-an hour to work out goes here, not in a commit message. -->
+- `.gitignore`'s `*.tfvars` swallows `example.tfvars` too, same as
+  `*.pkrvars.hcl`/`example.pkrvars.hcl` in `packer-windows`. Needs its own
+  `!example.tfvars` line right after, or the committed example silently never
+  stages.
+- Not every root needs a `sensitive = true` variable — this root's Milestone 4
+  scaffold (node, datastores, VLAN IDs) has no secrets in it at all, since
+  `provider "proxmox" {}` picks up `PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_API_TOKEN`
+  natively and never needs them as declared variables. Don't invent a sensitive
+  variable just to have one — mark one `sensitive` only once a real secret
+  variable exists (the WinRM passwords Milestone 5 adds, for instance).

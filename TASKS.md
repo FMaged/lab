@@ -590,7 +590,7 @@ green in CI against real resources — no host exists to apply them to.
    301. OPNsense placed on Management (10) since that's the one address it has
    that isn't a gateway for something, per network-design.md's address table.
 
-4. [ ] Scaffold the terraform/ root
+4. [x] Scaffold the terraform/ root
    **What:** `providers.tf`, `variables.tf` and a committed `example.tfvars` for the
    bpg/proxmox root, which currently holds only a version pin.
    **Why:** the OPNsense VM lands here per the decision in PLAN.md, and Milestone 5 adds
@@ -604,6 +604,17 @@ green in CI against real resources — no host exists to apply them to.
    `terraform/`. No endpoint, token or password literal in any committed file. Every secret
    variable carries `sensitive = true`. `example.tfvars` lists every variable with a
    placeholder value.
+
+   Notes: confirmed real with a locally installed terraform (fmt clean, init and
+   validate both green). No `sensitive = true` anywhere — this root's variables
+   (node, two datastores, three VLAN IDs) are all genuinely non-secret; the
+   `provider` block has an empty body and picks up `PROXMOX_VE_ENDPOINT` /
+   `PROXMOX_VE_API_TOKEN` natively, so there's no endpoint/token variable to mark
+   sensitive at all. Guest-level secrets (WinRM passwords) arrive in Milestone 5
+   with the guests that actually need them. `.terraform.lock.hcl` committed too,
+   on Terraform's own recommendation — same pinning discipline as everything
+   else. Added `!example.tfvars` to `.gitignore`, the same trap `*.pkrvars.hcl`
+   had.
 
    Notes:
 
