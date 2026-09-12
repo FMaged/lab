@@ -1167,7 +1167,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    findings, since this exact conversion is what the credential decision in
    PLAN.md requires, not an oversight to fix.
 
-5. [ ] Write the OU tree and the two groups
+5. [x] Write the OU tree and the two groups
    **What:** the `SILAB` top-level OU with `Computers/Servers`, `Computers/Workstations`,
    `Users`, `Groups` and `Service Accounts` beneath it, plus `SILAB-Admins` and
    `SILAB-Helpdesk` as global security groups.
@@ -1181,7 +1181,21 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    `docs/ad-design.md` node for node; re-running creates nothing and errors on nothing;
    no code moves DC01's computer object.
 
-   Notes:
+   Notes: landed as phase 4 in Bootstrap-DC01.ps1, right after the site-rename
+   phase, via two small local functions (`New-SILabOrganizationalUnit`,
+   `New-SILabGroup`) rather than the shared module - task 2 scoped
+   `SILab.psm1` to logging/phase/resume-task concerns only, and nothing but
+   DC01 ever creates an OU or a group, so there is no second caller to
+   justify putting this there instead. Both functions do their own
+   existence check (`Get-ADOrganizationalUnit`/`Get-ADGroup` with a
+   `-Filter` string, per the AD scripting reference) before creating
+   anything, which is what makes a retried phase 4 safe even though the
+   outer phase-marker guard already prevents that in the normal path. The
+   domain DN comes from `(Get-ADDomain).DistinguishedName` rather than a
+   hardcoded `DC=ad,DC=silab,DC=internal` literal, so it can never drift
+   from `$script:ForestDomainName`. Both groups land in the `Groups` OU,
+   which the task didn't say explicitly but is the only OU in the tree
+   that makes sense for them.
 
 6. [ ] Write the three baseline GPOs
    **What:** the domain password and lockout policy at the root, the Workstation Baseline

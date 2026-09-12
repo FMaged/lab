@@ -42,6 +42,62 @@ $script:ForestDomainName = 'ad.silab.internal'
 $script:DomainNetbiosName = 'SILAB'
 $script:SiteName = 'SILAB-Lab'
 
+function New-SILabOrganizationalUnit {
+    <#
+    .SYNOPSIS
+        Creates an OU under the given parent, unless it already exists.
+
+    .PARAMETER Name
+        The OU's own name.
+
+    .PARAMETER Path
+        The parent container's distinguished name.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Name,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Path
+    )
+
+    $existing = Get-ADOrganizationalUnit -Filter "Name -eq '$Name'" -SearchBase $Path -SearchScope OneLevel -ErrorAction SilentlyContinue
+    if ($null -eq $existing -and $PSCmdlet.ShouldProcess("$Name,$Path", 'Create organizational unit')) {
+        New-ADOrganizationalUnit -Name $Name -Path $Path | Out-Null
+    }
+}
+
+function New-SILabGroup {
+    <#
+    .SYNOPSIS
+        Creates a global security group, unless it already exists.
+
+    .PARAMETER Name
+        The group's name.
+
+    .PARAMETER Path
+        The container to create it in.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Name,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Path
+    )
+
+    $existing = Get-ADGroup -Filter "Name -eq '$Name'" -ErrorAction SilentlyContinue
+    if ($null -eq $existing -and $PSCmdlet.ShouldProcess($Name, 'Create AD group')) {
+        New-ADGroup -Name $Name -Path $Path -GroupScope Global -GroupCategory Security | Out-Null
+    }
+}
+
 Start-SILabTranscript -ScriptName 'Bootstrap-DC01'
 
 try {
@@ -129,7 +185,33 @@ try {
         Set-SILabPhase -Number 3 -Name 'SiteRename'
     }
 
-    # Phase 4 (OU tree and groups) lands in task 5.
+    if (-not (Test-SILabPhaseComplete -Number 4)) {
+        # Parents created before children - a retried phase may find some of
+        # the tree already present, which New-SILabOrganizationalUnit's own
+        # existence check makes safe to run again. The built-in Domain
+        # Controllers OU is never touched - docs/ad-design.md keeps DC01 in it.
+        $domainDN = (Get-ADDomain).DistinguishedName
+
+        New-SILabOrganizationalUnit -Name 'SILAB' -Path $domainDN
+        $silabOU = "OU=SILAB,$domainDN"
+
+        New-SILabOrganizationalUnit -Name 'Computers' -Path $silabOU
+        $computersOU = "OU=Computers,$silabOU"
+
+        New-SILabOrganizationalUnit -Name 'Servers' -Path $computersOU
+        New-SILabOrganizationalUnit -Name 'Workstations' -Path $computersOU
+        New-SILabOrganizationalUnit -Name 'Users' -Path $silabOU
+        New-SILabOrganizationalUnit -Name 'Groups' -Path $silabOU
+        New-SILabOrganizationalUnit -Name 'Service Accounts' -Path $silabOU
+
+        $groupsOU = "OU=Groups,$silabOU"
+        New-SILabGroup -Name 'SILAB-Admins' -Path $groupsOU
+        New-SILabGroup -Name 'SILAB-Helpdesk' -Path $groupsOU
+
+        Set-SILabPhase -Number 4 -Name 'OUsAndGroups'
+    }
+
+    # Phase 5 (baseline GPOs) lands in task 6.
 }
 finally {
     Stop-SILabTranscript
