@@ -1894,7 +1894,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    file, fetched over the same SSH connection Milestone 8 task 4's host firewall rule
    already allow-lists. Decision in PLAN.md, which also amends the proof-run decision.
 
-3. [ ] Replace the decisions this milestone reverses
+3. [x] Replace the decisions this milestone reverses
    **What:** `PLAN.md` entries recording the move to zero-touch, with every superseded
    entry marked.
    **Why:** standing decisions say the opposite of what this milestone builds. "The
@@ -1913,7 +1913,14 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    amendment naming what changed; each new entry has a Why and at least one Rejected; the
    decision index regenerates with every anchor resolving.
 
-   Notes:
+   Notes: added decision 35 as the umbrella entry — `Replaced by:` on decision 20,
+   `Amended by:` on decision 24, both linking to it. Confirmed real, not assumed: wrote a
+   small script checking every `](#...)` anchor in `PLAN.md` against every `###` heading's
+   GitHub-style slug; all of this task's new links resolve, and the one pre-existing miss
+   (decision 10's own anchor) predates this milestone and isn't this task's to fix.
+   Generated secrets recorded in the new entry: the OPNsense root password/API key/secret
+   and the Proxmox root password/two tokens, all extending the existing `.env` file rather
+   than opening a new secrets category.
 
 4. [ ] Add the new names and layout to docs/conventions.md
    **What:** the OPNsense template's name and VMID, the new `proxmox/` directory for the
