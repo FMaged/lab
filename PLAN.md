@@ -79,6 +79,7 @@ status decision below.
 | 31 | [The reader-facing surface is a narrative walkthrough plus an explicit limitations section](#the-reader-facing-surface-is-a-narrative-walkthrough-plus-an-explicit-limitations-section) |
 | 32 | [Every credential lives in one gitignored .env at the repository root](#every-credential-lives-in-one-gitignored-env-at-the-repository-root) |
 | 33 | [OPNsense ships as a Packer template, configured via its own live-image importer](#opnsense-ships-as-a-packer-template-configured-via-its-own-live-image-importer) |
+| 34 | [The Proxmox host installs itself from an answer file; its tokens travel to the operator over SSH](#the-proxmox-host-installs-itself-from-an-answer-file-its-tokens-travel-to-the-operator-over-ssh) |
 
 ### Topology is domain controller, member server, client and firewall
 
@@ -234,6 +235,16 @@ as Scaleway or Hetzner can take a Proxmox install, run the whole build once, be
 captured as evidence, and be destroyed the same weekend.
 Note: this is a capstone, not a dependency. Every milestone before it stands on its
 own, and the repo is a complete portfolio piece if it never happens.
+Note, corrected by Milestone 9's second SPIKE (2026-09-12): Hetzner and Scaleway were
+named here as interchangeable hourly examples without checking either provider's actual
+billing terms. Hetzner's real dedicated-hardware line (Server Auction/Robot) bills
+monthly, not hourly — only its virtualized Cloud product is hourly, which is exactly the
+kind of instance this decision's own "ordinary cloud VMs" rejection below rules out.
+Scaleway's Elastic Metal is genuinely hourly, genuinely bare metal, and lists Proxmox VE
+as a catalog image. See
+[The Proxmox host installs itself from an answer file; its tokens travel to the operator
+over SSH](#the-proxmox-host-installs-itself-from-an-answer-file-its-tokens-travel-to-the-operator-over-ssh).
+Milestone 8 task 1 still owns the final provider and product choice.
 Rejected: buying a host now — the largest cost in the project for a benefit that
 rented metal delivers for a few euros.
 Rejected: nesting Proxmox on the existing homelab host — not available at the moment.
@@ -597,3 +608,42 @@ works, but reimplements `config.xml` editing as ad hoc shell commands against a 
 this project already has full Terraform-resource coverage for (Milestone 4). The importer
 route reuses `opnsense/`'s existing resources for everything the API can reach and only
 needs a template for what only the installer can set.
+### The Proxmox host installs itself from an answer file; its tokens travel to the operator over SSH
+
+Why: researched live (2026-09-12). `proxmox-auto-install-assistant prepare-iso` is real
+and current, in the box since Proxmox VE 8.2: it embeds a TOML `answer.toml` — root
+password, network configuration, target disk — plus an optional first-boot script into an
+otherwise-stock installer ISO. The first-boot hook can be ordered `fully-up`, running only
+once networking is live, which is exactly the point at which it can safely mint Proxmox
+API tokens.
+Rented bare metal, not the host installer, turned out to be the harder half of this
+spike. Checked Hetzner and Scaleway — the two named in the proof-run decision — against
+their actual billing pages rather than trusting the decision's own wording. Hetzner's
+real bare-metal line (Server Auction/Robot) bills monthly with no hourly option; only
+Hetzner Cloud is hourly, and Cloud instances are virtualized, which is exactly what this
+project needs bare metal to avoid. Scaleway's Elastic Metal bills either hourly or
+monthly with no commitment fee on the hourly plan, is genuine dedicated hardware, and its
+Beryllium range lists Proxmox VE as a selectable catalog image outright. Scaleway
+satisfies every constraint Milestone 8 task 1 has to check; Hetzner, as named, does not.
+This corrects the proof-run decision's framing of the two as interchangeable, rather than
+narrowing it — final product, rate and boot mechanism are still Milestone 8 task 1's job,
+but it now starts from Scaleway rather than a coin flip.
+Where orchestration runs was the other open question: an operator's own workstation
+driving `scripts/deploy.sh` (Milestone 10), or the hypervisor's first-boot hook chaining
+straight into Terraform and Packer itself. Chose the operator route. The hook's only job
+is minting the two tokens this project already splits by tool (one for Terraform, one for
+Packer, so either can be revoked alone) and writing them to a root-only-readable file;
+whatever runs `deploy.sh` retrieves them over the same SSH connection the Milestone 8
+task 4 host firewall rule already allow-lists to one address, and takes it from there.
+Rejected: the hypervisor's own first-boot hook running the whole build — removes the wait
+for a human or a runner to fetch the tokens, but it means the orchestration logic lives
+and executes somewhere with no git history of its own, on a machine this project
+otherwise treats as a minimal appliance rather than a place to install general-purpose
+tooling.
+Rejected: the installer's own post-installation webhook feature as the token-delivery
+route — it is real, but built for install-status reporting, not for carrying secrets, and
+using it here would mean standing up a receiver just for a one-time run.
+Note: the billing check above corrects [The proof run is rented hourly bare metal, not
+purchased hardware](#the-proof-run-is-rented-hourly-bare-metal-not-purchased-hardware),
+which named Hetzner and Scaleway as interchangeable without checking either provider's
+actual terms — see the note added there.
