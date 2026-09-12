@@ -552,7 +552,7 @@ green in CI against real resources — no host exists to apply them to.
    addressing) — that stays manual, done *after* Terraform creates the VLAN devices, not
    before. Decision in PLAN.md.
 
-2. [ ] Write the firewall policy into docs/network-design.md
+2. [x] Write the firewall policy into docs/network-design.md
    **What:** a rule table — source, destination, service, and the reason the rule exists —
    plus the default-deny stance and the outbound NAT behaviour.
    **Why:** PLAN.md requires least privilege with a reason on every rule, and the
@@ -566,11 +566,14 @@ green in CI against real resources — no host exists to apply them to.
    as a destination in zero rules. Clients reach DC01 on DNS, Kerberos, LDAP, SMB and time
    and on nothing else. Default-deny and the outbound NAT behaviour are each stated.
 
-   2.1. [ ] Client-to-DC service rules, named per service
-   2.2. [ ] Management isolation and the default-deny statement
-   2.3. [ ] Outbound internet access per VLAN, and the NAT rule
+   2.1. [x] Client-to-DC service rules, named per service
+   2.2. [x] Management isolation and the default-deny statement
+   2.3. [x] Outbound internet access per VLAN, and the NAT rule
 
-   Notes:
+   Notes: 5 inter-VLAN rules (Clients->DC01 only), 5 outbound rules (one set per
+   VLAN, Clients get no direct DNS/NTP since both go through DC01/AD instead), one
+   NAT statement covering all three subnets. SRV01 isn't a destination anywhere
+   yet — nothing in the current topology needs to reach it directly.
 
 3. [ ] Assign guest VMIDs in docs/conventions.md
    **What:** a fixed VMID for OPNsense, DC01, SRV01 and CL01, in a range clear of the

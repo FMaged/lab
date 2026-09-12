@@ -46,3 +46,44 @@ DC01 runs AD-integrated DNS and is authoritative for `ad.silab.internal` (see
 (`10.10.10.1`/`10.10.20.1`/`10.10.30.1`, whichever is closer), which resolves the
 public internet through the WAN uplink. Every VM's DNS server is DC01 — set by
 PowerShell at first boot, never left on a DHCP-supplied default.
+
+## Firewall policy
+
+Default is deny between VLANs — an allow rule exists only for a specific, named
+reason. This table is the spec `opnsense/firewall.tf` implements; a rule that
+isn't in this table doesn't get written, and a row here with nothing implementing
+it is a bug in that file, not a stricter-than-documented bonus.
+
+**Inter-VLAN — Clients to DC01, exactly what a domain member needs:**
+
+| Source | Destination | Service | Port | Reason |
+| --- | --- | --- | --- | --- |
+| Clients (10.10.30.0/24) | DC01 (10.10.20.10) | DNS | 53/tcp+udp | name resolution |
+| Clients (10.10.30.0/24) | DC01 (10.10.20.10) | Kerberos | 88/tcp+udp | domain authentication |
+| Clients (10.10.30.0/24) | DC01 (10.10.20.10) | LDAP | 389/tcp | directory queries, GPO lookup |
+| Clients (10.10.30.0/24) | DC01 (10.10.20.10) | SMB | 445/tcp | SYSVOL/NETLOGON — GPO and script delivery |
+| Clients (10.10.30.0/24) | DC01 (10.10.20.10) | NTP | 123/udp | time sync — Kerberos fails outside a small clock skew |
+
+Nothing else crosses from Clients to Servers, and nothing from either reaches
+Management: **Management (10.10.10.0/24) is the destination of zero rules,
+inbound from any other VLAN.** SRV01 is deliberately not a destination here
+either — nothing in this lab's topology needs to reach it directly yet.
+
+**Outbound to the internet, one rule per VLAN, least privilege applied the same way:**
+
+| Source | Service | Port | Reason |
+| --- | --- | --- | --- |
+| Management (10.10.10.0/24) | HTTP/HTTPS | 80,443/tcp | Proxmox and OPNsense package/firmware updates |
+| Servers (10.10.20.0/24) | DNS | 53/tcp+udp | DC01's forwarder resolves through OPNsense, per the DNS section above |
+| Servers (10.10.20.0/24) | HTTP/HTTPS | 80,443/tcp | Windows Update, package sources |
+| Servers (10.10.20.0/24) | NTP | 123/udp | DC01 is the domain's authoritative time source and syncs it externally |
+| Clients (10.10.30.0/24) | HTTP/HTTPS | 80,443/tcp | Windows Update, general use |
+
+Clients get no outbound DNS or NTP rule — they resolve names and sync time
+through DC01 (the inter-VLAN table above and AD's own time hierarchy), never
+directly against the internet.
+
+**NAT:** one outbound rule, masquerading all three lab subnets
+(`10.10.10.0/24`, `10.10.20.0/24`, `10.10.30.0/24`) behind the WAN interface's
+address. No per-VLAN NAT rule — the outbound allow rules above already scope
+which traffic reaches WAN at all; NAT only has to translate it once it's there.
