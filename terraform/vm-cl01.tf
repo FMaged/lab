@@ -31,12 +31,16 @@ resource "proxmox_virtual_environment_vm" "cl01" {
 
   efi_disk {
     datastore_id = var.guest_datastore
+    # "4m" is required for Secure Boot and the provider defaults to "2m";
+    # pre_enrolled_keys defaults to false. Both per the bpg/proxmox 0.112.0 docs
+    # for this resource. Neither is inherited from the template, so both are set
+    # here explicitly on every UEFI guest.
+    type              = "4m"
+    pre_enrolled_keys = true
   }
 
-  # No pre_enrolled_keys-equivalent argument exists on this resource — Secure
-  # Boot's Microsoft keys ship enrolled in the "4m" OVMF firmware image itself,
-  # not as a separate Terraform-level toggle the way Packer's plugin exposes
-  # one. There is nothing more to set here for Secure Boot specifically.
+  # Windows 11 requires a TPM as well as Secure Boot. The firmware side is the
+  # efi_disk block above; this is the other half.
   tpm_state {
     datastore_id = var.guest_datastore
     version      = "v2.0"

@@ -20,6 +20,12 @@ resource "proxmox_virtual_environment_vm" "srv01" {
 
   efi_disk {
     datastore_id = var.guest_datastore
+    # "4m" is required for Secure Boot and the provider defaults to "2m";
+    # pre_enrolled_keys defaults to false. Both per the bpg/proxmox 0.112.0 docs
+    # for this resource. Neither is inherited from the template, so both are set
+    # here explicitly on every UEFI guest.
+    type              = "4m"
+    pre_enrolled_keys = true
   }
 
   cpu {
