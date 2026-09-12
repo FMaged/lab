@@ -17,11 +17,20 @@ status](#execution-status) for exactly what is and is not proven.
 ```mermaid
 flowchart TB
     internet(("Internet")) --- home["Home router<br/>192.168.1.0/24"]
-    home -- WAN --- opn["OPNsense"]
-    opn -- VLAN 10 Mgmt --- proxmox["Proxmox host"]
-    opn -- VLAN 20 Servers --- dc01["DC01"]
-    opn -- VLAN 20 Servers --- srv01["SRV01"]
-    opn -- VLAN 30 Clients --- cl01["CL01"]
+    home -- WAN --- opn
+
+    subgraph host["Proxmox host"]
+        opn["OPNsense"]
+        pve["Proxmox management"]
+        dc01["DC01"]
+        srv01["SRV01"]
+        cl01["CL01"]
+    end
+
+    opn -- "VLAN 10 Mgmt" --- pve
+    opn -- "VLAN 20 Servers" --- dc01
+    opn -- "VLAN 20 Servers" --- srv01
+    opn -- "VLAN 30 Clients" --- cl01
 ```
 
 Full diagram with addressing: [docs/network-diagram.md](docs/network-diagram.md).
@@ -56,7 +65,8 @@ Full diagram with addressing: [docs/network-diagram.md](docs/network-diagram.md)
 
 **This lab has not been applied to real hardware.** No Proxmox host exists yet, and
 the development machine can't stand in for one — see the execution-status decision
-in [PLAN.md](PLAN.md). Every claim below is about what's checked, not what's run.
+in [PLAN.md](PLAN.md). Everything in this section is about what is checked, not
+what has run.
 
 What the green badge above actually means, on every push:
 
