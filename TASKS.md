@@ -575,7 +575,7 @@ green in CI against real resources — no host exists to apply them to.
    NAT statement covering all three subnets. SRV01 isn't a destination anywhere
    yet — nothing in the current topology needs to reach it directly.
 
-3. [ ] Assign guest VMIDs in docs/conventions.md
+3. [x] Assign guest VMIDs in docs/conventions.md
    **What:** a fixed VMID for OPNsense, DC01, SRV01 and CL01, in a range clear of the
    `9000`–`9099` template block.
    **Why:** the `terraform-proxmox` skill requires every VM to carry an explicit `vm_id`
@@ -586,7 +586,9 @@ green in CI against real resources — no host exists to apply them to.
    **Accept:** four VMIDs listed — OPNsense, DC01, SRV01, CL01 — none inside `9000`–`9099`,
    none repeated, each one readable back to its VLAN.
 
-   Notes:
+   Notes: `<VLAN ID> x 10 + sequence>` — OPNsense 101, DC01 201, SRV01 202, CL01
+   301. OPNsense placed on Management (10) since that's the one address it has
+   that isn't a gateway for something, per network-design.md's address table.
 
 4. [ ] Scaffold the terraform/ root
    **What:** `providers.tf`, `variables.tf` and a committed `example.tfvars` for the
