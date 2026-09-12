@@ -44,8 +44,12 @@ for an address to drift out of sync with this document.
 DC01 runs AD-integrated DNS and is authoritative for `ad.silab.internal` (see
 `docs/ad-design.md`). Its forwarder points at OPNsense's resolver
 (`10.10.10.1`/`10.10.20.1`/`10.10.30.1`, whichever is closer), which resolves the
-public internet through the WAN uplink. Every VM's DNS server is DC01 — set by
-PowerShell at first boot, never left on a DHCP-supplied default.
+public internet through the WAN uplink. Every VM's DNS server is DC01, but the
+mechanism differs by how the VM gets its address: DC01 and SRV01 are static, so
+PowerShell sets DNS explicitly at first boot. CL01 is DHCP, so it gets DNS from
+the Kea scope's `dns_servers` option instead (`opnsense/dhcp.tf`) — deliberately
+configured to hand out `10.10.20.10`, not left on whatever OPNsense would offer
+by default.
 
 ## Firewall policy
 

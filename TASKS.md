@@ -681,7 +681,7 @@ green in CI against real resources — no host exists to apply them to.
    VLAN parent, and its value is exactly what runbook 3a step 3 has someone note
    by hand. Real fmt/init/validate all green.
 
-8. [ ] Write opnsense/interfaces.tf and opnsense/dhcp.tf
+8. [x] Write opnsense/interfaces.tf and opnsense/dhcp.tf
    **What:** whichever VLAN interface resources the spike found to be code-side, and a Kea
    DHCP scope serving the Clients VLAN only, pool `10.10.30.100`–`10.10.30.200`.
    **Why:** DHCP on VLAN 30 is what lets CL01 prove DHCP and domain join together, and
@@ -696,9 +696,18 @@ green in CI against real resources — no host exists to apply them to.
    `10.10.30.100`–`10.10.30.200`, DNS option `10.10.20.10`. VLANs 10 and 20 have no scope.
    The DNS paragraph in the design doc agrees, in the same commit.
 
-   8.1. [ ] VLAN interfaces, matching the design exactly
-   8.2. [ ] Kea scope on VLAN 30 with DC01 as the DNS option
-   8.3. [ ] Reconcile the DNS paragraph in docs/network-design.md
+   8.1. [x] VLAN interfaces, matching the design exactly
+   8.2. [x] Kea scope on VLAN 30 with DC01 as the DNS option
+   8.3. [x] Reconcile the DNS paragraph in docs/network-design.md
+
+   Notes: opnsense_kea_dhcpv4_subnet is subnet-based, not interface-referencing
+   — no cross-reference to the VLAN resources needed, just the matching CIDR.
+   Real fmt/validate both green. DNS paragraph now distinguishes DC01/SRV01
+   (static, PowerShell sets DNS explicitly) from CL01 (DHCP, gets DNS from the
+   Kea scope's dns_servers option instead) — the old wording implied every host
+   worked the same way, which stopped being true the moment DHCP existed. Left
+   an open question in a comment: whether Kea also needs a manual per-interface
+   enable toggle beyond what's in this file is unconfirmed until the proof run.
 
    Notes:
 
