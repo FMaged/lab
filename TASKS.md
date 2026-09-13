@@ -2250,16 +2250,243 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
 ## Milestone 10: One command goes from bare metal to a verified domain
 
-<!-- Not planned yet, deliberately: its tasks depend on what Milestone 9's two spikes find,
-     above all where orchestration runs and how the Proxmox token travels. Fill it in when
-     Milestone 9 lands. Runs before Milestone 8.
+Zero-touch, part two. The operator rents a server by hand and boots the prepared installer;
+from there, one command on the operator's machine takes the host to a domain that has
+verified itself. Renting and releasing the server stay manual by decision, so the command
+starts once the host answers SSH and ends by reminding the operator to release it.
 
-     What it has to deliver, so the destination is fixed even though the tasks are not:
-     - scripts/deploy.sh as the single command: prepare and boot the host ISO, wait for
-       the host, collect the token, generate .env, build all three templates, apply the
-       firewall, then DC01, then SRV01 and CL01, and wait for every Bootstrap phase.
-     - Test-SILab.ps1 run automatically at the end, its result as the command's exit code.
-     - Safe to re-run after a failure, without starting again from a clean host.
-     - scripts/destroy.sh, because an hourly bill needs teardown to be one command too.
-     - The runbook and the README's execution status rewritten around the single command.
-     - CI coverage for the orchestrator. -->
+The build runs on the Proxmox host, not the operator's machine. Neither Packer nor
+Terraform can send WinRM through a jump host, so whatever runs them needs a direct route to
+every build VM and guest, and only the host has one. Nothing is run here either — there is
+still no host — so this milestone ends at validated.
+
+Planning this milestone surfaced gaps in work already checked off, each written as a task
+below rather than patched in passing: the Windows builds wait on a guest agent they only
+install after connecting, their build VMs sit on the public bridge, the OPNsense build names
+no address to connect to, the host's answer file points at a gateway that does not exist at
+install time, and the Terraform handoff cannot survive its guest dropping its own address.
+
+Numbered after Milestone 8 but runs before it — see the note at the top of Milestone 8.
+
+Branch this milestone per `docs/conventions.md`: one branch, one commit per task, one PR.
+
+1. [ ] SPIKE: give the host a network that reaches every build VM and guest (max 3h)
+   **Why:** the build now runs on the host, so the host needs a route to everything it
+   connects to, in the order it connects. During `packer build` no firewall exists yet, so
+   the build VMs need a network the host reaches directly — today the Windows ones sit on
+   `vmbr0`, which on rented metal is the provider's public uplink, with WinRM open under a
+   bootstrap password. Afterwards the host reaches the guests through OPNsense. And
+   `proxmox/answer.toml` gives the host `10.10.10.1` as its only gateway, a VM that does not
+   exist while the host installs. This pulls Milestone 8 task 3's public uplink question
+   forward, as far as this milestone needs it answered.
+   **How:** decide the host's install-time network from the provider's uplink rather than
+   the lab address. Decide how `vmbr1` and the host's `10.10.10.2` on VLAN 10 get created:
+   the first-boot hook, or the runner's first stage over SSH — the second also works if
+   Proxmox came from the provider's own catalog image instead of the prepared ISO. Decide
+   where build VMs attach and how they get an address: a build network with DHCP served by
+   the host, or VLAN 10 directly. Check whether OPNsense's empty filter blocks SSH and its
+   API on the VLAN 10 interface, during the build and after. Check how the host trusts its
+   own `pve-root-ca`, since the Packer sources set `insecure_skip_tls_verify = false`.
+   Output: one decision entry in PLAN.md, and the list of changes task 6 makes to `docs/network-design.md`
+
+2. [ ] SPIKE: how a Linux orchestrator starts each Bootstrap script, knows it finished, and verifies the domain (max 2h)
+   **Why:** the Terraform handoff runs each Bootstrap script synchronously over WinRM.
+   DC01's first phase removes and re-adds its only address and its promotion reboots it, so
+   the session dies mid-command; a provisioner error taints the VM, and the next apply would
+   destroy and recreate a half-built domain controller. Then something has to know when every
+   phase on every guest has finished, and run `Test-SILab.ps1`, from a Linux host with no
+   PowerShell.
+   **How:** confirm how `remote-exec` over WinRM behaves when the connection drops
+   mid-command. Compare ways to launch the script detached, so the provisioner returns at
+   once, without breaking the rule that no credential is written to the guest's disk — a
+   scheduled task stores its arguments. Choose the completion signal, most likely each
+   guest's `C:\ProgramData\SILab\phase.json`. Compare the WinRM clients available on Linux
+   for polling and for running the health check: Terraform's own, reused through a
+   `terraform_data` resource, against `pywinrm`.
+   Output: one decision entry in PLAN.md
+
+3. [ ] Record this milestone's decisions in PLAN.md
+   **What:** entries for where the build runs, how the server is rented and released, where
+   the ISOs come from, and both spikes' outcomes, with the orchestration decision amended.
+   **Why:** "The Proxmox host installs itself from an answer file; its tokens travel to the
+   operator over SSH" put `scripts/deploy.sh` on the operator's workstation and sent the
+   tokens there. Both halves are now wrong: WinRM cannot hop through a jump host in Packer
+   or Terraform, so the build moves onto the host, and the tokens never need to leave it.
+   `AGENTS.md` keeps a decision standing until its entry is replaced.
+   **How:** add `Amended by:` to that decision, keeping its installer finding and
+   superseding its orchestration and token-delivery half. Record that renting and releasing
+   the server stay manual, so no provider API key enters `.env`, and that ISOs download on
+   the host from URLs in a non-secret var file. Rejected alternatives come from the planning
+   questions: WireGuard from the host, SSH port forwards, the provider's API, and uploading
+   ISOs from the workstation.
+   **Accept:** the orchestration decision carries `Amended by:` naming what changed and
+   what still stands; every new entry has a Why and at least one Rejected; the decision
+   index regenerates with every anchor resolving.
+
+   Notes:
+
+4. [ ] Make every Packer build reachable from the host
+   **What:** both Windows answer files install the QEMU guest agent before WinRM comes up,
+   all three sources attach their build VM where task 1 decided, and the OPNsense source
+   names the address Packer connects to.
+   **Why:** three separate problems stop Packer reaching a build VM as written. Both Windows
+   sources set `qemu_agent = true`, which is how the builder learns a build VM's address,
+   but the agent is installed by `install-guest-tools.ps1`, a provisioner that runs over
+   WinRM after Packer has connected — so both builds wait out their six-hour timeout. Both
+   Windows build VMs sit on `vmbr0` under a comment calling it the trunk, when Terraform and
+   the OPNsense build treat `vmbr0` as the WAN. And the OPNsense source disables the agent
+   and sets no `ssh_host`, so Packer has no way to learn that build VM's address at all.
+   **How:** add a `FirstLogonCommands` step installing `virtio-win-guest-tools.exe` from the
+   VirtIO ISO already attached, ordered before the WinRM steps, and keep
+   `install-guest-tools.ps1` idempotent so a re-run is harmless. Correct the bridges and the
+   misleading comment. Set the OPNsense source's `ssh_host` to the address task 1 confirms
+   the host can reach, and confirm against the pinned `hashicorp/proxmox` 1.2.3 that this is
+   how a build without an agent is addressed.
+   **Accept:** in both answer files the guest tools install is ordered before the first
+   WinRM command; no Windows source attaches a build VM to the public uplink; no comment
+   calls `vmbr0` the trunk; the OPNsense source sets `ssh_host`; `packer fmt -check` and
+   `packer validate .` pass.
+
+   Notes:
+
+5. [ ] Download every installation ISO on the host from a URL
+   **What:** both Windows images, VirtIO and OPNsense fetched by the host into its datastore
+   from URLs and checksums held in a non-secret var file.
+   **Why:** nothing large should cross the operator's connection while the server bills.
+   Datacenter bandwidth is faster, and a checksum per URL means a changed download fails
+   loudly instead of quietly building a template from the wrong image.
+   **How:** prefer Packer downloading on the Proxmox node itself, with `iso_url` and
+   `iso_download_pve`, if the pinned `hashicorp/proxmox` 1.2.3 supports it for both
+   `boot_iso` and `additional_iso_files`; otherwise `pvesh create
+   /nodes/<node>/storage/<storage>/download-url` in the runner. Handle OPNsense shipping as
+   `.iso.bz2` explicitly. URLs and checksums go in `packer/example.pkrvars.hcl` as
+   placeholders, never in `.env`.
+   **Accept:** no step uploads an ISO from the operator's machine; every download is
+   checksummed; the OPNsense image's compression is handled explicitly; `packer validate .`
+   passes.
+
+   Notes:
+
+6. [ ] Write the provisioning paths into the network design and the firewall
+   **What:** `docs/network-design.md` and `opnsense/firewall.tf` carrying the host's
+   install-time uplink, the build network, and least-privilege rules for the host's own
+   provisioning traffic, with `proxmox/answer.toml`'s network section corrected to match.
+   **Why:** with the build on the host, `10.10.10.2` has to reach WinRM on DC01, SRV01 and
+   CL01 and the OPNsense API. The firewall policy table allows none of that, so default
+   deny would block the handoff. The answer file's only gateway is also a VM that does not
+   exist when the host installs. Per `AGENTS.md`, the design document changes first, in the
+   same commit.
+   **How:** apply task 1's list. Add one row per rule — source `10.10.10.2` only, a single
+   destination, a single port, and the reason — rather than opening Management to the lab.
+   Replace `answer.toml`'s lab address and missing gateway with the provider uplink task 1
+   chose.
+   **Accept:** every new rule names `10.10.10.2` as its only source and one service port; no
+   rule opens a whole VLAN; `answer.toml` names no gateway that is a lab VM; the design
+   consistency check passes.
+
+   Notes:
+
+7. [ ] Make the Bootstrap handoff survive its guest dropping off the network
+   **What:** the three `remote-exec` provisioners launch each Bootstrap script so the
+   provisioner returns at once, per task 2, and each script writes the completion signal
+   task 2 chose after its final phase.
+   **Why:** as written, DC01's handoff fails the moment its first phase touches its address,
+   and a failed provisioner taints the VM so the next apply destroys it. The guest already
+   drives itself across reboots by design; Terraform only needs to start it and get out of
+   the way.
+   **How:** keep one entry point per guest and credentials passed as arguments, as the
+   credential decision requires. Check where the chosen launch mechanism keeps its arguments
+   and reject any that writes them to disk. Update the `powershell-provisioning` skill with
+   the launch and the signal.
+   **Accept:** no provisioner waits on a script that reboots or re-addresses its guest; no
+   launch mechanism stores a credential on the guest's disk; the completion signal is written
+   only after the final phase; `terraform validate` and PSScriptAnalyzer pass.
+
+   Notes:
+
+8. [ ] Write the host-side runner
+   **What:** a script that runs on the Proxmox host and takes it from freshly installed to
+   three built templates and four applied VMs, in order, skipping any stage whose result
+   already exists.
+   **Why:** this is the part of the one command that needs a direct route into the lab, so
+   it runs where the route is. Re-running must be safe: a failure an hour in cannot mean
+   renting a clean host.
+   **How:** install the exact Terraform and Packer versions `AGENTS.md` pins into a scratch
+   directory with their checksums verified, not from a package repository. Trust
+   `pve-root-ca` and point `PROXMOX_VE_ENDPOINT` and `PKR_VAR_proxmox_url` at the node's own
+   name, so `insecure_skip_tls_verify = false` stays honest. Merge the first-boot hook's
+   token lines into the host's `.env` and delete the token file. Then build any template
+   that does not exist yet, apply the firewall, apply DC01 and wait for its completion
+   signal, then SRV01 and CL01, and wait again.
+   **Accept:** the stages run in runbook order, sections 2 to 5; every stage checks for its
+   result before acting; tool versions and checksums are pinned exactly; no step disables
+   TLS verification; `shellcheck` passes.
+
+   Notes:
+
+9. [ ] Write scripts/deploy.sh
+   **What:** the one command, run on the operator's machine with the rented server's
+   address as its only argument, that copies the repository and `.env` to the host over SSH,
+   runs the host-side runner, streams its output and exits with its result.
+   **Why:** the operator should need SSH and nothing else — no Terraform, no Packer, and no
+   route into the lab.
+   **How:** fail fast if `.env` is missing, pointing at `scripts/init-env.sh`. Copy `.env`
+   with owner-only permissions. Exclude `.git`, `.terraform/` and anything gitignored except
+   `.env`. Keep SSH host key checking on: accept the key once, deliberately, rather than
+   disabling verification for a machine on the public internet.
+   **Accept:** the script takes exactly one address argument; nothing it copies is readable
+   by anyone but root on the host; host key verification is never disabled; its exit code is
+   the runner's; `shellcheck` passes.
+
+   Notes:
+
+10. [ ] End with the verdict, then scrub the host
+    **What:** the run finishes by executing `Test-SILab.ps1` on DC01 through the client task
+    2 chose, returns its result as the command's exit code, and removes every secret from
+    the host once the run has passed.
+    **Why:** a deployment that reports success without verifying the domain is only a
+    script that stopped. And releasing the server by hand does not guarantee the provider
+    wipes its disks, while the host holds `.env`, Terraform state with every credential in
+    it, and the rendered answer file.
+    **How:** run the health check only after every completion signal is present, and pass
+    its exit code through unchanged. After a pass, scrub automatically. After a failure,
+    keep the state so a re-run can continue, and print the exact command to scrub before
+    releasing the server. The scrub removes `.env`, all Terraform state, the token file and
+    any rendered answer file, and ends by reminding the operator to release the server in
+    the provider console.
+    **Accept:** the exit code is the health check's; a passing run scrubs automatically; a
+    failing run keeps its state and prints the scrub command; the scrub also runs on its
+    own; `shellcheck` passes.
+
+    Notes:
+
+11. [ ] Extend CI to the orchestration scripts
+    **What:** the new scripts under `shellcheck`, the design consistency check reading shell
+    files, and proof that both still fail on a break.
+    **Why:** the runner and `deploy.sh` will carry lab addresses — `10.10.10.2` and the
+    guests' WinRM targets — and the consistency check reads `.tf`, `.pkr.hcl`, `.xml` and
+    `.toml` but not shell. An address typed wrong in the runner would pass today.
+    **How:** confirm the new scripts fall inside the existing `shellcheck` job's paths. Add
+    `.sh` to the consistency script's suffixes and `scripts` to its scanned directories.
+    Break each on a scratch commit, the way Milestone 2 task 8 did.
+    **Accept:** a shell error in either new script turns CI red; a wrong lab address in a
+    script fails the consistency check naming the file and line; every check is green on the
+    real branch.
+
+    Notes:
+
+12. [ ] Rewrite the runbook and README around the one command, and revise Milestone 8
+    **What:** runbook sections 1 to 5 describing what `deploy.sh` does and what to check when
+    a stage stops, the README's execution status and next steps naming the one command, and
+    Milestone 8's tasks revised for a proof run that is a single command.
+    **Why:** the note at the top of Milestone 8 defers revising its manual-path tasks until
+    this milestone lands, and task 1 here now answers most of its task 3. Left alone, the
+    proof run would be planned around a runbook this milestone replaced.
+    **How:** keep every never-executed marker. Revise Milestone 8 by marking superseded tasks
+    `[~]` with a one-line reason and adding replacements at the end, never rewriting a task's
+    text, per the rules at the top of this file.
+    **Accept:** no runbook section tells a person to run a stage `deploy.sh` runs; the README
+    names `scripts/deploy.sh` and states it has not been run; every superseded Milestone 8
+    task is `[~]` with a reason, and none has had its text rewritten.
+
+    Notes:
