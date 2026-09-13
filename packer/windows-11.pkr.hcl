@@ -46,12 +46,15 @@ source "proxmox-iso" "windows_11" {
   }
 
   # -- Installation media --
-  # boot_iso, not the deprecated top-level iso_file/iso_checksum.
+  # boot_iso, not the deprecated top-level iso_file/iso_checksum. Downloaded by
+  # Proxmox itself (iso_download_pve) — see windows-server-2025.pkr.hcl's
+  # matching comment on why the URL's filename has to match docs/conventions.md.
   boot_iso {
     type             = "ide"
-    iso_file         = "${var.iso_datastore}:iso/${var.win11_iso_file}"
+    iso_url          = var.win11_iso_url
     iso_checksum     = var.win11_iso_checksum
     iso_storage_pool = var.iso_datastore
+    iso_download_pve = true
   }
 
   additional_iso_files {
@@ -60,10 +63,12 @@ source "proxmox-iso" "windows_11" {
     iso_storage_pool = var.iso_datastore
   }
   additional_iso_files {
-    type         = "scsi"
-    iso_file     = "${var.iso_datastore}:iso/${var.virtio_iso_file}"
-    iso_checksum = var.virtio_iso_checksum
-    unmount      = true
+    type             = "scsi"
+    iso_url          = var.virtio_iso_url
+    iso_checksum     = var.virtio_iso_checksum
+    iso_storage_pool = var.iso_datastore
+    iso_download_pve = true
+    unmount          = true
   }
 
   qemu_agent = true

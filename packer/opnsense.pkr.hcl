@@ -72,6 +72,12 @@ source "proxmox-iso" "opnsense" {
   }
 
   # -- Installation media --
+  # Unlike the two Windows sources, this stays a plain iso_file reference —
+  # OPNsense ships as .iso.bz2, which iso_download_pve cannot decompress. The
+  # host-side runner downloads and decompresses opnsense_iso_url into exactly
+  # this path before `packer build` ever runs, verifying opnsense_iso_checksum
+  # itself (task 5, PLAN.md's host-network SPIKE) — Packer never touches the
+  # network for this one.
   boot_iso {
     type             = "ide"
     iso_file         = "${var.iso_datastore}:iso/${var.opnsense_iso_file}"

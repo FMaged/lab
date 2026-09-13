@@ -38,12 +38,17 @@ source "proxmox-iso" "windows_server_2025" {
   }
 
   # -- Installation media --
-  # boot_iso, not the deprecated top-level iso_file/iso_checksum.
+  # boot_iso, not the deprecated top-level iso_file/iso_checksum. Downloaded by
+  # Proxmox itself (iso_download_pve) from win_server_iso_url — nothing crosses
+  # the operator's connection, only the host's (task 5, PLAN.md). The URL's own
+  # filename becomes the datastore filename, so it must end in exactly
+  # win_server_iso_file (docs/conventions.md) for that table to stay honest.
   boot_iso {
     type             = "ide"
-    iso_file         = "${var.iso_datastore}:iso/${var.win_server_iso_file}"
+    iso_url          = var.win_server_iso_url
     iso_checksum     = var.win_server_iso_checksum
     iso_storage_pool = var.iso_datastore
+    iso_download_pve = true
   }
 
   # Two separate CD-ROMs: the answer file generated on the fly, and the VirtIO
@@ -55,10 +60,12 @@ source "proxmox-iso" "windows_server_2025" {
     iso_storage_pool = var.iso_datastore
   }
   additional_iso_files {
-    type         = "scsi"
-    iso_file     = "${var.iso_datastore}:iso/${var.virtio_iso_file}"
-    iso_checksum = var.virtio_iso_checksum
-    unmount      = true
+    type             = "scsi"
+    iso_url          = var.virtio_iso_url
+    iso_checksum     = var.virtio_iso_checksum
+    iso_storage_pool = var.iso_datastore
+    iso_download_pve = true
+    unmount          = true
   }
 
   qemu_agent = true

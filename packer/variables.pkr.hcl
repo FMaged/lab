@@ -45,39 +45,39 @@ variable "template_datastore" {
   default     = "local-lvm"
 }
 
-variable "win_server_iso_file" {
+variable "win_server_iso_url" {
   type        = string
-  description = "ISO filename on iso_datastore — see the Packer templates table in docs/conventions.md"
-  default     = "win-server-2025-de.iso"
+  description = "URL Proxmox downloads the German Windows Server 2025 ISO from (iso_download_pve) — its filename must match the Packer templates table in docs/conventions.md exactly, since that filename becomes the datastore path"
+  default     = "https://example.invalid/win-server-2025-de.iso"
 }
 
 variable "win_server_iso_checksum" {
   type        = string
-  description = "sha256:<hash> for win_server_iso_file — \"none\" until the real ISO is uploaded and checksummed"
+  description = "sha256:<hash> for win_server_iso_url — \"none\" until the real ISO is checksummed"
   default     = "none"
 }
 
-variable "win11_iso_file" {
+variable "win11_iso_url" {
   type        = string
-  description = "ISO filename on iso_datastore — see the Packer templates table in docs/conventions.md"
-  default     = "win-11-pro-de.iso"
+  description = "URL Proxmox downloads the German Windows 11 Pro ISO from (iso_download_pve) — see win_server_iso_url on why the filename matters"
+  default     = "https://example.invalid/win-11-pro-de.iso"
 }
 
 variable "win11_iso_checksum" {
   type        = string
-  description = "sha256:<hash> for win11_iso_file — \"none\" until the real ISO is uploaded and checksummed"
+  description = "sha256:<hash> for win11_iso_url — \"none\" until the real ISO is checksummed"
   default     = "none"
 }
 
-variable "virtio_iso_file" {
+variable "virtio_iso_url" {
   type        = string
-  description = "Version-pinned VirtIO driver ISO filename on iso_datastore — no \"latest\" alias, per docs/conventions.md"
-  default     = "virtio-win-0.1.285.iso"
+  description = "URL Proxmox downloads the version-pinned VirtIO driver ISO from (iso_download_pve) — no \"latest\" alias, per docs/conventions.md; see win_server_iso_url on why the filename matters"
+  default     = "https://example.invalid/virtio-win-0.1.285.iso"
 }
 
 variable "virtio_iso_checksum" {
   type        = string
-  description = "sha256:<hash> for virtio_iso_file — \"none\" until the real ISO is uploaded and checksummed"
+  description = "sha256:<hash> for virtio_iso_url — \"none\" until the real ISO is checksummed"
   default     = "none"
 }
 
@@ -90,14 +90,20 @@ variable "local_admin_password" {
 
 variable "opnsense_iso_file" {
   type        = string
-  description = "ISO filename on iso_datastore — see the Packer templates table in docs/conventions.md"
+  description = "ISO filename on iso_datastore — see the Packer templates table in docs/conventions.md. Placed there by the host-runner's download step (opnsense_iso_url below), not by this file's own boot_iso block — OPNsense ships compressed, see that variable."
   default     = "OPNsense-26.7-dvd-amd64.iso"
 }
 
 variable "opnsense_iso_checksum" {
   type        = string
-  description = "sha256:<hash> for opnsense_iso_file — \"none\" until the real ISO is uploaded and checksummed"
+  description = "sha256:<hash> of the DECOMPRESSED opnsense_iso_file — \"none\" until the real ISO is checksummed. Verified by the host-runner's download step, not by Packer — see opnsense_iso_url."
   default     = "none"
+}
+
+variable "opnsense_iso_url" {
+  type        = string
+  description = "URL of OPNsense's official installer image, shipped as .iso.bz2 — Packer/Proxmox's iso_download_pve cannot decompress it, so the host-side runner downloads and decompresses this into opnsense_iso_file itself, verifying opnsense_iso_checksum by hand. Not read by any .pkr.hcl source; recorded here only so every ISO source lives in one non-secret file (task 5, PLAN.md)."
+  default     = "https://example.invalid/OPNsense-26.7-dvd-amd64.iso.bz2"
 }
 
 variable "opnsense_api_key" {

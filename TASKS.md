@@ -2413,7 +2413,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    parse as well-formed XML; `check-design-consistency.py` and
    `check-markdown-links.py` both pass.
 
-5. [ ] Download every installation ISO on the host from a URL
+5. [x] Download every installation ISO on the host from a URL
    **What:** both Windows images, VirtIO and OPNsense fetched by the host into its datastore
    from URLs and checksums held in a non-secret var file.
    **Why:** nothing large should cross the operator's connection while the server bills.
@@ -2429,7 +2429,25 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    checksummed; the OPNsense image's compression is handled explicitly; `packer validate .`
    passes.
 
-   Notes:
+   Notes: confirmed live, not assumed — fetched the pinned `hashicorp/proxmox` 1.2.3
+   builder source directly (`builder/proxmox/iso/config.go`): `boot_iso` is typed as
+   `common.ISOsConfig`, the exact same struct `additional_iso_files` uses, so it
+   already carries `iso_url`/`iso_download_pve` — no version bump needed, and no
+   `pvesh download-url` fallback either. Replaced `win_server_iso_file`/`win11_iso_file`/
+   `virtio_iso_file` with `_iso_url` variables (Proxmox derives the datastore filename
+   from the URL itself, so the URL's basename has to match `docs/conventions.md`'s
+   table — said explicitly in a comment everywhere it matters) and wired
+   `iso_download_pve = true` into both Windows sources' `boot_iso` and both `virtio`
+   `additional_iso_files` blocks. OPNsense's `boot_iso` deliberately keeps its old
+   `iso_file` shape — `iso_download_pve` cannot decompress `.iso.bz2`, so a new
+   `opnsense_iso_url` variable exists only for the host-side runner (task 8) to
+   download and decompress into `opnsense_iso_file` itself, checksumming by hand;
+   nothing in `packer/*.pkr.hcl` reads it. `docs/runbook.md` section 2's "upload the
+   ISOs" step is now stale but deliberately left for task 12's full rewrite rather
+   than patched twice. Confirmed real: `packer fmt -check` and `packer validate .`
+   both pass (only the expected "checksum is none" warnings, same as every ISO
+   variable before this task); `check-design-consistency.py` and
+   `check-markdown-links.py` both still pass.
 
 6. [ ] Write the provisioning paths into the network design and the firewall
    **What:** `docs/network-design.md` and `opnsense/firewall.tf` carrying the host's
