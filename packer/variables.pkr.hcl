@@ -27,6 +27,12 @@ variable "proxmox_api_token_secret" {
   sensitive = true
 }
 
+variable "proxmox_bridge_build" {
+  type        = string
+  description = "Internal, disposable Proxmox bridge every build VM attaches to — no VLAN, no production traffic, DHCP served by the host-side runner's dnsmasq. See the host-network SPIKE in PLAN.md; not vmbr0 (WAN) or vmbr1 (the VLAN trunk), which is why this is its own variable rather than terraform/'s proxmox_bridge_wan/_trunk reused."
+  default     = "vmbr2"
+}
+
 variable "iso_datastore" {
   type        = string
   description = "Datastore that holds installation and VirtIO ISOs"

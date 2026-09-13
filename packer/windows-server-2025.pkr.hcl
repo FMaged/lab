@@ -34,7 +34,7 @@ source "proxmox-iso" "windows_server_2025" {
 
   network_adapters {
     model  = "virtio"
-    bridge = "vmbr0" # trunk bridge — see docs/hardware.md for the two viable NIC layouts.
+    bridge = var.proxmox_bridge_build # disposable build network, not WAN — see the host-network SPIKE in PLAN.md.
   }
 
   # -- Installation media --

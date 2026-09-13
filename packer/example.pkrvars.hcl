@@ -3,6 +3,8 @@
 
 proxmox_node = "pve"
 
+proxmox_bridge_build = "vmbr2"
+
 iso_datastore      = "local"
 template_datastore = "local-lvm"
 

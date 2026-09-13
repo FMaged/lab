@@ -1,6 +1,9 @@
 # Driver ISO comes from the source block's additional_iso_files. Finds the
 # CD-ROM dynamically rather than assuming a letter — same reason the answer
-# files hedge their driver paths across D:/E:/F:.
+# files hedge their driver paths across D:/E:/F:. The answer file's own
+# FirstLogonCommands now runs this same install before WinRM exists at all
+# (so qemu_agent can address the VM at all) — this provisioner still runs
+# too, idempotently, as a second attempt in case that inline copy failed.
 $ErrorActionPreference = 'Stop'
 
 $installer = Get-Volume |

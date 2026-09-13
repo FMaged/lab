@@ -42,7 +42,7 @@ source "proxmox-iso" "windows_11" {
 
   network_adapters {
     model  = "virtio"
-    bridge = "vmbr0"
+    bridge = var.proxmox_bridge_build # disposable build network, not WAN — see the host-network SPIKE in PLAN.md.
   }
 
   # -- Installation media --

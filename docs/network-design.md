@@ -19,6 +19,19 @@ NIC is tagged to the one VLAN it belongs to (see the `terraform-proxmox` skill �
 every `network_device` must set `vlan_id` explicitly). VLAN 1 is not used, so an
 untagged frame has nowhere valid to go.
 
+## Build network (Packer only)
+
+A fourth, disposable network, `10.10.99.0/24` on `vmbr2` — not a VLAN, not tagged,
+and not part of the lab's own topology above. It exists only because `packer build`
+needs somewhere to put a build VM before OPNsense exists to route anything, and is
+torn down conceptually the moment the templates it built are done — nothing in
+production ever attaches to it. The host-side runner (`TASKS.md` Milestone 10 task
+8) creates `vmbr2` and serves DHCP on it with `dnsmasq`. OPNsense's build VM, which
+has no guest agent to be addressed by, gets a fixed reservation at `10.10.99.10` —
+see the host-network SPIKE decision in `PLAN.md` and `packer/opnsense.pkr.hcl`. Task
+6 adds the host's own `10.10.10.2` provisioning path and the matching firewall
+rules once `vmbr1`/VLAN 10 exist.
+
 ## Static address table
 
 | Host | VLAN | Address | Notes |

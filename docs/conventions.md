@@ -118,6 +118,12 @@ pins it explicitly on the matching guest's `network_device` rather than letting
 Proxmox generate one, since a generated MAC changes on rebuild and silently
 misses its reservation. See the bootstrap addressing decision in `PLAN.md`.
 
+One more MAC exists outside this table, `02:00:00:00:99:10` — not a guest,
+OPNsense's *build* VM (`packer/opnsense.pkr.hcl`), which has no guest agent to
+be addressed by and so needs a fixed reservation on the disposable build
+network instead (`docs/network-design.md`, PLAN.md's host-network SPIKE). Kept
+out of the table above since it never becomes a running lab guest.
+
 ## Formatting and pinning (CI-enforced)
 
 - `terraform fmt` and `packer fmt` clean at all times, in `terraform/`, `opnsense/`

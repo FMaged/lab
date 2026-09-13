@@ -196,19 +196,26 @@
           <PlainText>true</PlainText>
         </Password>
       </AutoLogon>
+      <!-- Order 1 installs the QEMU guest agent before WinRM exists at all — see
+           autounattend-server.xml's comment on this same step for why. -->
       <FirstLogonCommands>
         <SynchronousCommand wcm:action="add">
           <Order>1</Order>
+          <Description>Install QEMU guest agent (VirtIO guest tools) before WinRM</Description>
+          <CommandLine>powershell -NoProfile -ExecutionPolicy Bypass -Command "$exe = Get-Volume | Where-Object { $_.DriveType -eq 'CD-ROM' -and $_.DriveLetter } | ForEach-Object { $_.DriveLetter + ':\virtio-win-guest-tools.exe' } | Where-Object { Test-Path $_ } | Select-Object -First 1; if ($exe) { Start-Process -FilePath $exe -ArgumentList '/install','/quiet','/norestart' -Wait -NoNewWindow }"</CommandLine>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add">
+          <Order>2</Order>
           <Description>Enable WinRM</Description>
           <CommandLine>winrm quickconfig -quiet</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
-          <Order>2</Order>
+          <Order>3</Order>
           <Description>Allow WinRM basic auth and unencrypted traffic for the build only</Description>
           <CommandLine>powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true; Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true"</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
-          <Order>3</Order>
+          <Order>4</Order>
           <Description>Open the WinRM HTTP port</Description>
           <CommandLine>netsh advfirewall firewall add rule name="WinRM-HTTP" dir=in action=allow protocol=TCP localport=5985</CommandLine>
         </SynchronousCommand>

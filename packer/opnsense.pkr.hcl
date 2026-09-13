@@ -6,6 +6,17 @@ locals {
   opnsense_bootstrap_password      = "Pa$$w0rd-PackerBuild!"
   opnsense_bootstrap_password_hash = "$6$silabbootstrap01$je7lSx/SpZ64HHPPxIIE0W7LSPrjqvRi3RlLazRyOVU1C0UntEPlXKrNTQK05KReFqKCapGuO1jHuoULp7dQ.0"
 
+  # No qemu-guest-agent on this build (FreeBSD), so Packer can't ask Proxmox
+  # what address it picked — unlike the two Windows builds, this one needs a
+  # fixed, knowable address instead. A locally-administered MAC (never a real
+  # vendor OUI, same reasoning as docs/conventions.md's guest MAC scheme, but
+  # this one is a build-only artifact, not a production guest — it never
+  # appears in that table) paired with a matching static reservation in the
+  # host-side runner's dnsmasq config (scripts/host-runner.sh). Both sides of
+  # this pairing have to change together if either does.
+  opnsense_build_mac = "02:00:00:00:99:10"
+  opnsense_build_ip  = "10.10.99.10"
+
   opnsense_config = templatefile("${path.root}/files/config.xml", {
     opnsense_bootstrap_password_hash = local.opnsense_bootstrap_password_hash
     opnsense_api_key                 = var.opnsense_api_key
@@ -31,7 +42,12 @@ source "proxmox-iso" "opnsense" {
   # No EFI/TPM: OPNsense/FreeBSD needs neither, unlike the Windows templates.
   # Two NICs in the same order vm-opnsense.tf's clone must declare them in —
   # the zero-touch SPIKE's vtnet0/vtnet1 naming only holds if that order never
-  # drifts between this build and task 8's clone.
+  # drifts between this build and task 8's clone. Both land on the disposable
+  # build bridge here, not vmbr0/vmbr1 — the guest's own OS has no idea which
+  # physical/virtual bridge sits behind vtnet0 or vtnet1, only their PCI slot
+  # order, so build-time and production bridge assignment can differ freely
+  # (host-network SPIKE, PLAN.md). vtnet0 (WAN, first) gets a fixed MAC below
+  # since this build has no other way to be addressed for SSH.
   machine = "q35"
   bios    = "seabios"
   cores   = 2
@@ -46,12 +62,13 @@ source "proxmox-iso" "opnsense" {
   }
 
   network_adapters {
-    model  = "virtio"
-    bridge = "vmbr0" # WAN — matches terraform/variables.tf's proxmox_bridge_wan default.
+    model       = "virtio"
+    bridge      = var.proxmox_bridge_build
+    mac_address = local.opnsense_build_mac
   }
   network_adapters {
     model  = "virtio"
-    bridge = "vmbr1" # VLAN trunk — matches proxmox_bridge_trunk's default.
+    bridge = var.proxmox_bridge_build
   }
 
   # -- Installation media --
@@ -122,8 +139,12 @@ source "proxmox-iso" "opnsense" {
   # -- Communicator --
   # SSH, not WinRM — config.xml's <ssh><group>admins</group> block enables it
   # for the bootstrap login. The rotation provisioner below is what actually
-  # needs it, exactly once.
+  # needs it, exactly once. No guest agent (qemu_agent = false above) means
+  # Packer has no way to discover this VM's address on its own, unlike the two
+  # Windows builds — ssh_host names it explicitly instead, the fixed
+  # reservation local.opnsense_build_mac gets from the runner's dnsmasq.
   communicator = "ssh"
+  ssh_host     = local.opnsense_build_ip
   ssh_username = "root"
   ssh_password = local.opnsense_bootstrap_password
   ssh_timeout  = "45m"

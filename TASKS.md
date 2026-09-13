@@ -2372,7 +2372,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    Confirmed real, not assumed: `check-markdown-links.py` passes, which is what keeps
    the generated decision index and every cross-reference honest.
 
-4. [ ] Make every Packer build reachable from the host
+4. [x] Make every Packer build reachable from the host
    **What:** both Windows answer files install the QEMU guest agent before WinRM comes up,
    all three sources attach their build VM where task 1 decided, and the OPNsense source
    names the address Packer connects to.
@@ -2394,7 +2394,24 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    calls `vmbr0` the trunk; the OPNsense source sets `ssh_host`; `packer fmt -check` and
    `packer validate .` pass.
 
-   Notes:
+   Notes: `ssh_host` is a Packer-core SSH-communicator field, not proxmox-plugin-
+   specific — applies unconditionally, no version check needed against 1.2.3. New
+   `proxmox_bridge_build` variable (default `vmbr2`) replaces the hardcoded `vmbr0` on
+   all four build NICs across the three sources — simpler than adding `proxmox_bridge_
+   wan`/`_trunk` to Packer too, since build-time bridge assignment no longer needs to
+   match production at all (the guest OS only sees vtnet0/vtnet1 PCI-slot order, never
+   which Proxmox bridge sits behind it). OPNsense's build VM has no guest agent, so its
+   first NIC gets a fixed MAC (`02:00:00:00:99:10`) paired with a static
+   `10.10.99.10` reservation the host-runner's dnsmasq will serve (task 8) —
+   `ssh_host` points at that address. Real gap surfaced by the design-consistency
+   check, not anticipated: both new literals had to be added to
+   `docs/network-design.md` (a new "Build network" section) and
+   `docs/conventions.md` (as an explicit non-guest exception to the MAC table) in this
+   same commit before the checker went green — task 6 still owns the fuller
+   host-uplink/firewall-rule treatment of that section. Confirmed real: `packer fmt
+   -check`, `packer init` and `packer validate .` all pass; both answer files still
+   parse as well-formed XML; `check-design-consistency.py` and
+   `check-markdown-links.py` both pass.
 
 5. [ ] Download every installation ISO on the host from a URL
    **What:** both Windows images, VirtIO and OPNsense fetched by the host into its datastore
