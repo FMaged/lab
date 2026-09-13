@@ -2689,7 +2689,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
     Notes:
 
-11. [ ] Extend CI to the orchestration scripts
+11. [x] Extend CI to the orchestration scripts
     **What:** the new scripts under `shellcheck`, the design consistency check reading shell
     files, and proof that both still fail on a break.
     **Why:** the runner and `deploy.sh` will carry lab addresses — `10.10.10.2` and the
@@ -2702,7 +2702,26 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     script fails the consistency check naming the file and line; every check is green on the
     real branch.
 
-    Notes:
+    Notes: `shellcheck scripts/*.sh proxmox/*.sh` already covered every new script —
+    `deploy.sh`, `host-runner.sh` and `scrub-host.sh` all live directly under
+    `scripts/`, so no workflow change was needed there, only confirming it, per this
+    task's own "How." `check-design-consistency.py`'s `CODE_DIRS` gained `scripts` and
+    `CODE_SUFFIXES` gained `.sh`. Widening it immediately caught two real, pre-existing
+    literals `host-runner.sh` had never been checked against — `10.10.99.100`/
+    `10.10.99.200`, the dnsmasq pool bounds from task 1's SPIKE — missing from
+    `docs/network-design.md`'s Build network section (it only ever named the network
+    and the one fixed reservation, never the pool range); fixed there in this same
+    commit, not routed around by loosening the check.
+
+    Confirmed real, not assumed, both proofs this task asks for: unquoted a variable
+    in a scratch copy of `host-runner.sh` and confirmed `shellcheck` flags it (SC2086)
+    then reverted; changed `10.10.10.2` to `10.10.10.99` in a scratch copy and
+    confirmed `check-design-consistency.py` names the exact file and line, then
+    reverted. Every check — `shellcheck`, design consistency, `check-markdown-links.py`
+    — passes clean on the real branch afterward. **Not verified: real CI.** Same
+    limitation as every earlier milestone's version of this task — no `gh` CLI or
+    token in this environment, so nothing was pushed from here; confirm on the next
+    real push.
 
 12. [ ] Rewrite the runbook and README around the one command, and revise Milestone 8
     **What:** runbook sections 1 to 5 describing what `deploy.sh` does and what to check when

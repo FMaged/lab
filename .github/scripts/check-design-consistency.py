@@ -28,8 +28,10 @@ OWNERS = {
 # Where the values get used. packer/ and proxmox/ joined in Milestone 9, once
 # packer/files/config.xml and proxmox/answer.toml started carrying real
 # addresses baked in at build time instead of a person typing them by hand.
-CODE_DIRS = ("terraform", "opnsense", "packer", "proxmox")
-CODE_SUFFIXES = (".tf", ".pkr.hcl", ".xml", ".toml")
+# scripts/ joined in Milestone 10, once the host-side runner started carrying
+# 10.10.10.2 and the guests' own addresses as literals of its own.
+CODE_DIRS = ("terraform", "opnsense", "packer", "proxmox", "scripts")
+CODE_SUFFIXES = (".tf", ".pkr.hcl", ".xml", ".toml", ".sh")
 
 MAC_RE = re.compile(r"\b([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})\b")
 # Lab address space only. The WAN side is a real home or provider network and is

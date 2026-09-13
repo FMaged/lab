@@ -25,12 +25,13 @@ A fourth, disposable network, `10.10.99.0/24` on `vmbr2` — not a VLAN, not tag
 and not part of the lab's own topology above. It exists only because `packer build`
 needs somewhere to put a build VM before OPNsense exists to route anything, and is
 torn down conceptually the moment the templates it built are done — nothing in
-production ever attaches to it. The host-side runner (`TASKS.md` Milestone 10 task
-8) creates `vmbr2` and serves DHCP on it with `dnsmasq`. OPNsense's build VM, which
-has no guest agent to be addressed by, gets a fixed reservation at `10.10.99.10` —
-see the host-network SPIKE decision in `PLAN.md` and `packer/opnsense.pkr.hcl`. Task
-6 adds the host's own `10.10.10.2` provisioning path and the matching firewall
-rules once `vmbr1`/VLAN 10 exist.
+production ever attaches to it. `scripts/host-runner.sh` creates `vmbr2` at
+`10.10.99.1` and serves DHCP on it with `dnsmasq`, pool `10.10.99.100`–`10.10.99.200`.
+OPNsense's build VM, which has no guest agent to be addressed by, gets a fixed
+reservation outside that pool at `10.10.99.10` — see the host-network SPIKE decision
+in `PLAN.md` and `packer/opnsense.pkr.hcl`. `scripts/host-runner.sh` also creates
+`vmbr1` (the VLAN 10/20/30 trunk) and the host's own `10.10.10.2` on it, once the
+firewall rules in the Firewall policy section below allow that address through.
 
 ## Static address table
 
