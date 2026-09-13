@@ -2598,7 +2598,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
    Notes:
 
-9. [ ] Write scripts/deploy.sh
+9. [x] Write scripts/deploy.sh
    **What:** the one command, run on the operator's machine with the rented server's
    address as its only argument, that copies the repository and `.env` to the host over SSH,
    runs the host-side runner, streams its output and exits with its result.
@@ -2612,7 +2612,32 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    by anyone but root on the host; host key verification is never disabled; its exit code is
    the runner's; `shellcheck` passes.
 
-   Notes:
+   Notes: a real gap in this task's own text, found while writing it rather than
+   invented scope: "exclude anything gitignored except .env" would leave
+   `packer/packer.auto.pkrvars.hcl` behind — the file the operator creates locally
+   with the real ISO URLs/checksums/node name, gitignored because it isn't secret,
+   not because it's meant to stay off the host. Without it, `packer build` on the
+   host would run entirely against `packer/variables.pkr.hcl`'s placeholder
+   defaults. Copies it (and any other `*.auto.tfvars`/`*.auto.pkrvars.hcl`) alongside
+   `.env` instead of literally just `.env`, and says why in a comment rather than
+   silently widening scope. Uses `tar` piped over `ssh`, not `rsync` or `scp -r` —
+   the operator needs "SSH and nothing else" per this task's own Why, and `tar` is
+   as universal as `ssh` itself where `rsync` is not guaranteed to be installed.
+   `git ls-files -z`/`find -print0` and `tar --null -T` throughout, so a filename
+   with a space or newline can't break the manifest. SSH host key checking is
+   simply never touched — no `StrictHostKeyChecking`/`UserKnownHostsFile` flag at
+   all, which is what "accept the key once, deliberately" means in practice: the
+   normal interactive prompt on first connection, not a bypass. Confirmed real,
+   not assumed: ran the manifest-build-and-tar-pipe end to end locally (a scratch
+   `.env` copied from `example.env`, then removed again afterward) — every tracked
+   file plus `.env` arrived byte-identical on the "remote" side, and neither `.git`
+   nor `.terraform` was among them. `shellcheck` needed one file-wide
+   `disable=SC2029` (every `${remote_dir}`-style variable in a command string sent
+   to `ssh` is deliberately expanded locally before it ever reaches the wire, not a
+   collision with a same-named remote variable) with a comment saying why, matching
+   this repo's existing practice of a targeted, justified disable over silencing a
+   real class of mistake. Not executed against a real host — no host exists yet,
+   same limitation as every other layer.
 
 10. [ ] End with the verdict, then scrub the host
     **What:** the run finishes by executing `Test-SILab.ps1` on DC01 through the client task
