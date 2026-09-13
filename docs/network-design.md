@@ -40,10 +40,18 @@ rules once `vmbr1`/VLAN 10 exist.
 | OPNsense (Mgmt) | 10 | 10.10.10.1 | gateway for VLAN 10 |
 | OPNsense (Servers) | 20 | 10.10.20.1 | gateway for VLAN 20 |
 | OPNsense (Clients) | 30 | 10.10.30.1 | gateway for VLAN 30 |
-| Proxmox host | 10 | 10.10.10.2 | web UI + API |
+| Proxmox host | 10 | 10.10.10.2 | web UI + API — reaches the provider's uplink by DHCP first (install time, no VLANs exist yet), then the host-side runner creates `vmbr1` and this address itself — see below |
 | DC01 | 20 | 10.10.20.10 | reaches this address by DHCP reservation first, then PowerShell sets it statically — see below |
 | SRV01 | 20 | 10.10.20.11 | same bootstrap-then-static path as DC01 |
 | CL01 | 30 | 10.10.30.50 | DHCP reservation, mandatory — CL01 stays on DHCP permanently, this just pins the lease |
+
+The Proxmox host's own address arrives in two stages, not one — the same
+bootstrap-then-static shape DC01 and SRV01 use, but for the host itself rather
+than a guest. `proxmox/answer.toml` installs the host with `source = "from-dhcp"`:
+whatever the rented server's provider hands out on its single physical NIC, since
+no VLAN exists yet to put a static address on. Only once the build has run and
+`vmbr1` (the VLAN trunk bridge) exists does the host-side runner add `10.10.10.2`
+as a tagged address on VLAN 10 — see the host-network SPIKE decision in `PLAN.md`.
 
 ## DHCP
 
@@ -100,8 +108,24 @@ it is a bug in that file, not a stricter-than-documented bonus.
 
 Nothing else crosses from Clients to Servers, and nothing from either reaches
 Management: **Management (10.10.10.0/24) is the destination of zero rules,
-inbound from any other VLAN.** SRV01 is deliberately not a destination here
-either — nothing in this lab's topology needs to reach it directly yet.
+inbound from any other VLAN.** Neither SRV01 nor CL01 is a destination for
+*another VLAN's* traffic here — only the Proxmox host's own provisioning
+traffic reaches either directly, below.
+
+**Provisioning — the Proxmox host to specific lab guests, and to OPNsense's own
+API.** The build now runs on the host itself (Milestone 10), so `10.10.10.2` is
+the source Terraform's WinRM handoff and the host-side runner's health check
+both come from, and the source `opnsense/`'s own Terraform provider calls the
+firewall's API from. Each rule names the host as its only source and one guest
+or the firewall itself as its only destination — never the whole Management
+subnet, the way the outbound-to-internet table below does:
+
+| Source | Destination | Service | Port | Reason |
+| --- | --- | --- | --- | --- |
+| Proxmox host (10.10.10.2) | OPNsense (10.10.10.1) | HTTPS | 443/tcp | `opnsense/`'s own Terraform provider — its API calls are traffic like any other, not exempt from the empty default-deny ruleset |
+| Proxmox host (10.10.10.2) | DC01 (10.10.20.10) | WinRM | 5985/tcp | Terraform's provisioner, and the runner polling `phase.json` / running the health check |
+| Proxmox host (10.10.10.2) | SRV01 (10.10.20.11) | WinRM | 5985/tcp | same as DC01 |
+| Proxmox host (10.10.10.2) | CL01 (10.10.30.50) | WinRM | 5985/tcp | same as DC01 |
 
 **Outbound to the internet, one rule per VLAN, least privilege applied the same way:**
 

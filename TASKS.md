@@ -2449,7 +2449,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    variable before this task); `check-design-consistency.py` and
    `check-markdown-links.py` both still pass.
 
-6. [ ] Write the provisioning paths into the network design and the firewall
+6. [x] Write the provisioning paths into the network design and the firewall
    **What:** `docs/network-design.md` and `opnsense/firewall.tf` carrying the host's
    install-time uplink, the build network, and least-privilege rules for the host's own
    provisioning traffic, with `proxmox/answer.toml`'s network section corrected to match.
@@ -2465,6 +2465,23 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** every new rule names `10.10.10.2` as its only source and one service port; no
    rule opens a whole VLAN; `answer.toml` names no gateway that is a lab VM; the design
    consistency check passes.
+
+   Notes: `answer.toml`'s `[network]` now reads `source = "from-dhcp"` alone — that
+   source value forbids every other network key, so `cidr`/`gateway`/`dns` are gone,
+   not just changed. Four new rules on `opnsense_interface_management`
+   (sequence 107-110, right after the client-to-DC01 block): the host to
+   OPNsense's own API (443, for `opnsense/`'s own Terraform provider — a real,
+   previously-unnoticed gap the host-network SPIKE found, since nothing had ever
+   exercised that root against a real firewall) and to each of DC01/SRV01/CL01 on
+   WinRM (5985). New `srv01`/`cl01`/`proxmox_host` aliases alongside the existing
+   `dc01` one — SRV01 and CL01 are now destinations for the first time, so the
+   Milestone 4 note explaining why they weren't is corrected in the same commit,
+   not left standing next to code that contradicts it. Confirmed real: `terraform
+   fmt`/`validate` green in `opnsense/`; `answer.toml` still parses as valid TOML
+   (checked with Python's `tomllib`); `check-design-consistency.py` and
+   `check-markdown-links.py` both pass — the new IPs needed no new doc literals
+   since `10.10.10.1`/`10.10.10.2`/`10.10.20.11`/`10.10.30.50` were already in
+   `docs/network-design.md`'s static address table.
 
    Notes:
 

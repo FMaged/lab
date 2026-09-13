@@ -16,15 +16,13 @@ timezone             = "Europe/Berlin"
 root-password-hashed = "${PROXMOX_ROOT_PASSWORD_HASH}"
 
 [network]
-# Static, per docs/network-design.md's Management VLAN address for the
-# Proxmox host. DNS is a placeholder public resolver, not DC01 — DC01 doesn't
-# exist yet at install time, and whether the host even sits on this address
-# directly or behind a router depends on Milestone 8 task 3's still-open
-# public-WAN question. Confirm both against the real rented server before use.
-source  = "from-answer"
-cidr    = "10.10.10.2/24"
-gateway = "10.10.10.1"
-dns     = "9.9.9.9"
+# The provider's own uplink, not a lab address — 10.10.10.1 is OPNsense's
+# Management gateway, and OPNsense does not exist yet at install time (host-
+# network SPIKE, PLAN.md). "from-dhcp" forbids every other network key, so
+# there is no cidr/gateway/dns to set here at all. The host's own 10.10.10.2 on
+# VLAN 10 is added afterward, by the host-side runner's first stage, once
+# vmbr1 exists — see docs/network-design.md.
+source = "from-dhcp"
 
 [disk-setup]
 filesystem = "ext4"
