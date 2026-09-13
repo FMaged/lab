@@ -1632,8 +1632,9 @@ after it but run before it: the decision was to make the whole deployment zero-t
 before paying for a proof run, so this milestone should end up running one command rather
 than the runbook by hand. The numbers stay as they are because seven files outside this
 one already refer to the proof run as Milestone 8. Task 1's spike is largely answered by
-Milestone 9's second spike, and tasks 4 to 7 describe the manual path; revise them when
-Milestone 10 lands, not before.
+Milestone 9's second spike. Milestone 10 has now landed: tasks 4-7 described the manual
+path and are marked `[~]`, superseded by tasks 12 and 13, which run the one command
+instead — see Milestone 10 task 12.
 
 Optional by design — everything above stands without it. This is the milestone that turns
 "this should work" into "this ran", for roughly the price of a meal.
@@ -1688,9 +1689,17 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    rule in `opnsense/firewall.tf` accepts unsolicited inbound WAN traffic; the decision on
    static or DHCP WAN addressing is recorded.
 
-   Notes:
+   Notes: Milestone 10's host-network SPIKE (decision 36, `PLAN.md`) already answers
+   most of this — the host's own install-time network is the provider's DHCP uplink,
+   not a lab address, and `opnsense/firewall.tf` accepts no unsolicited inbound WAN
+   traffic. What is still genuinely open: whether the *rented server's own* WAN
+   address ends up static or DHCP depends on the specific product task 1 picks, which
+   hasn't happened yet. Task text unchanged; this task is not superseded, just
+   partly pre-answered.
 
-4. [ ] Rent the machine, install Proxmox, and restrict access to one address
+4. [~] Rent the machine, install Proxmox, and restrict access to one address — Proxmox
+   now installs itself unattended (Milestone 9); the still-manual half of this task
+   (rent, boot the prepared ISO, restrict the host firewall) moves to task 12.
    **What:** runbook section 1 executed for real — the machine rented, Proxmox installed,
    and the host firewall restricting the web interface to your own public address before
    that interface is reachable at all.
@@ -1708,7 +1717,8 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
    Notes:
 
-5. [ ] Run runbook section 2 — both Packer templates
+5. [~] Run runbook section 2 — both Packer templates — `scripts/deploy.sh` now runs
+   this as one stage of the host-side runner; see task 13.
    **What:** `packer build` producing `tpl-winsrv2025-de-v1` and `tpl-win11-de-v1` on the
    real host.
    **Why:** the image build has never run, and it is the layer with the longest feedback
@@ -1723,7 +1733,8 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
    Notes:
 
-6. [ ] Run runbook section 3 — OPNsense routing the VLANs
+6. [~] Run runbook section 3 — OPNsense routing the VLANs — `scripts/deploy.sh` now
+   runs this too; see task 13.
    **What:** the firewall VM created, installed and bootstrapped by hand, then
    `terraform apply` in `opnsense/` creating the VLANs, DHCP, rules and NAT.
    **Why:** this is the first test of the manual and code halves meeting at the boundary
@@ -1739,7 +1750,8 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
    Notes:
 
-7. [ ] Run runbook sections 4 and 5 — the domain and both members
+7. [~] Run runbook sections 4 and 5 — the domain and both members — `scripts/deploy.sh`
+   runs this too, ending in `Test-SILab.ps1`'s own verdict; see task 13.
    **What:** DC01 promoted, SRV01 and CL01 joined, all three driven by their own Bootstrap
    scripts across their own reboots.
    **Why:** the reboot-resume mechanism and the credential ordering are the two most
@@ -1814,6 +1826,42 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     **Accept:** every failure in `docs/proof-run.md` appears as a task or is explicitly
     dismissed with a reason; runbook section 6 is either written or retired, with no
     placeholder left behind.
+
+    Notes:
+
+12. [ ] Rent the machine, boot the prepared installer, and restrict host access
+    **What:** the server rented, `proxmox/answer.toml`'s prepared ISO booted, the
+    unattended install completing on its own, and the host firewall restricting the web
+    interface to your own public address before that interface is reachable at all —
+    replaces the still-manual half of superseded task 4.
+    **Why:** renting and releasing the server stay manual by decision (`PLAN.md`
+    decision 38); everything past "the host answers SSH" is `scripts/deploy.sh`'s job,
+    not this task's.
+    **How:** rent per task 1's chosen product. Boot the ISO `scripts/prepare-proxmox-iso.sh`
+    produced. Wait for the unattended install and the first-boot hook to finish. Set the
+    host firewall rule restricting the web UI to your own address **before** relying on
+    anything past this point, then verify from a second network that it is refused, exactly
+    as superseded task 4 specified.
+    **Accept:** the host answers SSH with `PROXMOX_ROOT_PASSWORD` from `.env`; the web UI
+    is reachable from your address and provably refused from a different one; runbook
+    section 1 filled in with what was actually done.
+
+    Notes:
+
+13. [ ] Run scripts/deploy.sh and record its verdict
+    **What:** `scripts/deploy.sh <host-address>` run from the operator's own machine, its
+    output watched to completion, and its exit code recorded — replaces superseded tasks
+    5, 6 and 7 with the one command they became.
+    **Why:** this is the actual zero-touch claim exercised for the first time: three
+    templates, four guests, a domain, and `Test-SILab.ps1`'s own verdict, from one
+    command instead of a runbook followed by hand.
+    **How:** apply the task 2 time box to any stage that stalls — the runner's own output
+    names which stage it is in. A nonzero exit means state was kept and secrets were not
+    scrubbed; capture the failure (task 8's job) before deciding whether to fix and re-run
+    or destroy. A zero exit means the host has already scrubbed itself.
+    **Accept:** the command's own exit code is recorded; on success, the host confirms it
+    scrubbed itself; on failure, the exact scrub command `deploy.sh` printed is recorded
+    alongside the error, for task 9 to run before destroying the machine.
 
     Notes:
 
@@ -2723,7 +2771,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     token in this environment, so nothing was pushed from here; confirm on the next
     real push.
 
-12. [ ] Rewrite the runbook and README around the one command, and revise Milestone 8
+12. [x] Rewrite the runbook and README around the one command, and revise Milestone 8
     **What:** runbook sections 1 to 5 describing what `deploy.sh` does and what to check when
     a stage stops, the README's execution status and next steps naming the one command, and
     Milestone 8's tasks revised for a proof run that is a single command.
@@ -2736,5 +2784,28 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     **Accept:** no runbook section tells a person to run a stage `deploy.sh` runs; the README
     names `scripts/deploy.sh` and states it has not been run; every superseded Milestone 8
     task is `[~]` with a reason, and none has had its text rewritten.
+
+    Notes: runbook sections 1-5 rewritten — section 1 stops at "the host answers SSH and
+    the firewall rule is set," then hands off explicitly to `scripts/deploy.sh`; sections
+    2-5 each now describe which of `scripts/host-runner.sh`'s stages does that section's
+    work, plus an "if it stalls" paragraph carried over from the old by-hand
+    troubleshooting notes (still just as true — a stage failing looks the same whether a
+    person or a script triggered it). Every "Never executed" marker kept, per this task's
+    own How. Milestone 8: tasks 4-7 marked `[~]` with a one-line reason each, appended to
+    the checkbox line rather than touching the existing What/Why/How/Accept body below —
+    task 3 gets a similar note but stays open, since Milestone 10's SPIKE only
+    pre-answers *most* of it (the still-open half is which specific rented product ends
+    up with a static vs. DHCP WAN address, which task 1 hasn't picked yet). Two new
+    tasks added at the end (12, 13) rather than renumbering anything, covering the
+    still-manual precursor (rent, boot the ISO, restrict host access) and the one-command
+    run itself. The milestone's own header note updated to say the revision happened,
+    since that note is prose directing a future reader, not a numbered task's text.
+    README: "Execution status" and "What would come next" now name
+    `scripts/deploy.sh <host-address>` explicitly and state it has not run. Also fixed
+    two things found stale while already in this file, not new scope: the layer index
+    still described OPNsense as "booted from its installer ISO" (a Milestone 9 change,
+    apparently missed at the time) and had no row at all for `proxmox/` or `scripts/`,
+    both added in Milestone 9. Confirmed real: `check-markdown-links.py` (84 links now,
+    up from 82 — the two new README rows) and `check-design-consistency.py` both pass.
 
     Notes:

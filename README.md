@@ -56,10 +56,12 @@ Full diagram with addressing: [docs/network-diagram.md](docs/network-diagram.md)
 
 | Layer | What it does |
 | --- | --- |
-| [packer/](packer/) | Builds the two base images — Windows Server 2025 and Windows 11 |
-| [terraform/](terraform/) | Creates all four VMs on Proxmox: the three Windows guests cloned from those images, plus the OPNsense firewall booted from its installer ISO |
+| [packer/](packer/) | Builds three templates — Windows Server 2025, Windows 11, and OPNsense, configured via its own live-image importer |
+| [terraform/](terraform/) | Creates all four VMs on Proxmox by cloning those templates, and waits for each guest's own completion signal |
 | [powershell/](powershell/) | First-boot config: identity, AD promotion, domain join, GPOs, and a read-only health check |
-| [opnsense/](opnsense/) | VLAN interfaces, DHCP, firewall rules and NAT for the lab |
+| [opnsense/](opnsense/) | DHCP, firewall rules and NAT for the lab — VLAN interfaces are baked into the template |
+| [proxmox/](proxmox/) | Makes the host install itself unattended, and mints the API tokens the other layers need |
+| [scripts/](scripts/) | `deploy.sh`, the one command — everything else here runs because it called them |
 
 ## Execution status
 
@@ -79,9 +81,10 @@ What the green badge above actually means, on every push:
 
 This catches malformed code, bad references and leaked secrets — it does not prove
 a VM boots, a domain forms, or a firewall rule actually blocks anything. That proof
-is Milestone 8: an optional run on rented bare metal, captured as evidence. See
-[TASKS.md](TASKS.md) for what's done and what's next; this section's wording
-updates the moment a real proof run lands.
+is Milestone 8: an optional run on rented bare metal, captured as evidence, driven
+entirely by one command — `scripts/deploy.sh <host-address>` — that has **not been
+run**. See [TASKS.md](TASKS.md) for what's done and what's next; this section's
+wording updates the moment a real proof run lands.
 
 ## Scope — what this deliberately does not do
 
@@ -99,9 +102,12 @@ Each of these is a decision, not an omission. The reasoning is in
 
 ## What would come next
 
-1. **The proof run.** Rent bare metal by the hour, apply the whole repository once,
-   capture the evidence, destroy it. Planned as Milestone 8 in [TASKS.md](TASKS.md)
-   and deliberately optional — everything before it stands on its own.
+1. **The proof run.** Rent bare metal by the hour, boot the prepared installer, then
+   run `scripts/deploy.sh <host-address>` — the one command that builds the
+   templates, routes the network, promotes the domain and joins both members,
+   ending in its own health check's verdict — capture the evidence, destroy it.
+   Planned as Milestone 8 in [TASKS.md](TASKS.md) and deliberately optional —
+   everything before it stands on its own.
 2. **A second domain controller.** Replication and DNS redundancy, once there is a
    host with room for a fifth VM.
 3. **Backup and monitoring**, in that order. Backup first, because a lab that cannot
