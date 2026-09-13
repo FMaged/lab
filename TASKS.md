@@ -2270,7 +2270,7 @@ Numbered after Milestone 8 but runs before it — see the note at the top of Mil
 
 Branch this milestone per `docs/conventions.md`: one branch, one commit per task, one PR.
 
-1. [ ] SPIKE: give the host a network that reaches every build VM and guest (max 3h)
+1. [x] SPIKE: give the host a network that reaches every build VM and guest (max 3h)
    **Why:** the build now runs on the host, so the host needs a route to everything it
    connects to, in the order it connects. During `packer build` no firewall exists yet, so
    the build VMs need a network the host reaches directly — today the Windows ones sit on
@@ -2288,6 +2288,29 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    API on the VLAN 10 interface, during the build and after. Check how the host trusts its
    own `pve-root-ca`, since the Packer sources set `insecure_skip_tls_verify = false`.
    Output: one decision entry in PLAN.md, and the list of changes task 6 makes to `docs/network-design.md`
+
+   Notes: researched live (2026-09-13) against current Proxmox/Scaleway/OPNsense
+   sources, not assumed from the older plan. `answer.toml` moves to
+   `source = "from-dhcp"` for the provider's uplink — confirmed against the real
+   answer-file schema and Scaleway's own Elastic Metal docs. `vmbr1` (VLAN-aware,
+   `bridge-vids`) and the host's own `10.10.10.2` (a `vmbr1.10` sub-interface) are
+   created by the host-side runner's first stage over SSH, not
+   `proxmox/first-boot-hook.sh` — keeps the hook a single-purpose appliance script
+   and works the same whether Proxmox came from the prepared ISO or Scaleway's own
+   Proxmox catalog image. Build VMs get a third, disposable bridge (`vmbr2`,
+   `10.10.99.0/24`) with a `dnsmasq` the runner starts, rather than VLAN 10 itself
+   — `docs/network-design.md` states Management has no DHCP scope at all, and reusing
+   it for build traffic would either contradict that or carve an exception into it.
+   Real bug found and recorded, not invented for this task: OPNsense's empty
+   `<filter>` blocks `10.10.10.2` from reaching OPNsense's own API on `opt1`, since
+   the automatic anti-lockout rule only ever attaches to an interface flagged `<lan>`
+   and none of `opt1`/`opt2`/`opt3` carry that role — confirmed against OPNsense's
+   own anti-lockout documentation and issue opnsense/core#7372, not assumed; task 6
+   adds the missing rule. Residual unknown, left for the Milestone 8 proof run:
+   whether Proxmox's self-signed cert's SAN actually covers the node's configured
+   name closely enough for `insecure_skip_tls_verify = false` to validate once
+   `pve-root-ca.pem` is trusted — not confirmable from documentation alone. Decision
+   in PLAN.md.
 
 2. [ ] SPIKE: how a Linux orchestrator starts each Bootstrap script, knows it finished, and verifies the domain (max 2h)
    **Why:** the Terraform handoff runs each Bootstrap script synchronously over WinRM.
