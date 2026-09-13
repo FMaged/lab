@@ -2312,7 +2312,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    `pve-root-ca.pem` is trusted — not confirmable from documentation alone. Decision
    in PLAN.md.
 
-2. [ ] SPIKE: how a Linux orchestrator starts each Bootstrap script, knows it finished, and verifies the domain (max 2h)
+2. [x] SPIKE: how a Linux orchestrator starts each Bootstrap script, knows it finished, and verifies the domain (max 2h)
    **Why:** the Terraform handoff runs each Bootstrap script synchronously over WinRM.
    DC01's first phase removes and re-adds its only address and its promotion reboots it, so
    the session dies mid-command; a provisioner error taints the VM, and the next apply would
@@ -2327,6 +2327,25 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    for polling and for running the health check: Terraform's own, reused through a
    `terraform_data` resource, against `pywinrm`.
    Output: one decision entry in PLAN.md
+
+   Notes: the real answer was already sitting in code from Milestone 6, not a new
+   mechanism — `powershell/SILab.psm1`'s `Set-SILabPhase` already writes
+   `C:\ProgramData\SILab\phase.json` before every reboot-triggering call (built for
+   the resume mechanism), and `Register-SILabResumeTask` already resumes with no
+   credential in its argument list, confirmed by reading both files directly rather
+   than assumed. So the fix is: launch each Bootstrap script via `Start-Process
+   -WindowStyle Hidden` (returns at once, no disk-persisted argument, unlike a
+   scheduled task) and let Terraform's `remote-exec` return immediately; the
+   host-side runner then polls `phase.json` over WinRM with `curl --ntlm` in a bash
+   loop, and runs `Test-SILab.ps1` the same way once every guest reaches its
+   terminal phase. Chose `curl --ntlm` over both named candidates —
+   `terraform_data` reusing Terraform's WinRM client (real, but turns polling into a
+   `terraform apply` per attempt) and `pywinrm` (adds a pip/Python dependency whose
+   maintenance status couldn't be confirmed live, disqualifying given this repo's
+   pin-and-verify discipline). Confirmed live: Terraform's WinRM/SSH provisioners
+   have no built-in way to survive a connection dropped mid-command by a reboot —
+   a known, long-standing class of issue, not a config flag away from fixed.
+   Decision in PLAN.md.
 
 3. [ ] Record this milestone's decisions in PLAN.md
    **What:** entries for where the build runs, how the server is rented and released, where
