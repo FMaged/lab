@@ -325,6 +325,21 @@ stage_apply_srv01_cl01() {
   wait_for_guest "terraform_data.wait_cl01" "CL01 (phase 1)"
 }
 
+# -- The verdict, then the scrub -------------------------------------------
+# Runs only once every guest has reached its terminal phase — never a
+# substitute for that wait, a step after it (task 10). Test-SILab.ps1's own
+# exit code is what "pass" or "fail" means here; a passing run scrubs every
+# secret this host holds automatically, a failing run keeps state (including
+# .env and both Terraform states) so a re-run can pick up where this one left
+# off, and prints the exact command to scrub by hand before releasing the
+# server anyway.
+stage_run_health_check() {
+  log "running Test-SILab.ps1 on DC01"
+  (cd "${repo_root}/terraform" && terraform apply -auto-approve \
+    -target=terraform_data.run_health_check \
+    -replace=terraform_data.run_health_check)
+}
+
 main() {
   stage_trust_proxmox_ca
   stage_install_tools
@@ -335,7 +350,16 @@ main() {
   stage_apply_firewall
   stage_apply_dc01
   stage_apply_srv01_cl01
-  log "host runner finished — DC01, SRV01 and CL01 have all reached their terminal phase"
+
+  if stage_run_health_check; then
+    log "PASS — Test-SILab.ps1 found nothing wrong. Scrubbing secrets from the host."
+    "${repo_root}/scripts/scrub-host.sh"
+    exit 0
+  fi
+
+  log "FAIL — Test-SILab.ps1 found a problem. State is kept so a re-run can continue."
+  log "Before releasing this server, scrub it by hand: ${repo_root}/scripts/scrub-host.sh"
+  exit 1
 }
 
 main "$@"

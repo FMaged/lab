@@ -60,4 +60,17 @@ tar -cz -C "${repo_root}" --null -T "${manifest}" |
 ssh "root@${host}" "chmod -R go-rwx '${remote_dir}'"
 
 log "running the host-side runner"
-ssh "root@${host}" "'${remote_dir}/scripts/host-runner.sh'"
+status=0
+ssh "root@${host}" "'${remote_dir}/scripts/host-runner.sh'" || status=$?
+
+if [[ "${status}" -eq 0 ]]; then
+  exit 0
+fi
+
+# host-runner.sh already printed why and left every secret in place for a
+# re-run (task 10) — this is the one thing only the operator's own machine
+# knows: the address to reach the host at again.
+echo "error: the run failed — see the runner's own output above." >&2
+echo "Before releasing the server, scrub its secrets with:" >&2
+echo "  ssh root@${host} '${remote_dir}/scripts/scrub-host.sh'" >&2
+exit "${status}"

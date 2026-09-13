@@ -2639,7 +2639,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    real class of mistake. Not executed against a real host — no host exists yet,
    same limitation as every other layer.
 
-10. [ ] End with the verdict, then scrub the host
+10. [x] End with the verdict, then scrub the host
     **What:** the run finishes by executing `Test-SILab.ps1` on DC01 through the client task
     2 chose, returns its result as the command's exit code, and removes every secret from
     the host once the run has passed.
@@ -2656,6 +2656,36 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
     **Accept:** the exit code is the health check's; a passing run scrubs automatically; a
     failing run keeps its state and prints the scrub command; the scrub also runs on its
     own; `shellcheck` passes.
+
+    Notes: a fourth `terraform_data` resource, `run_health_check`
+    (`terraform/wait-for-guests.tf`), `depends_on` all three `wait_*` resources and runs
+    `Test-SILab.ps1` on DC01 — already there via `vm-dc01.tf`'s own `file` provisioner,
+    nothing new to copy. `-File`'s own semantics make the script's `exit N` become
+    `powershell.exe`'s process exit code directly, so the resource's pass/fail already
+    is the health check's, with no extra wrapping needed. "The exit code is the health
+    check's" reads here as pass/fail (0 or nonzero), not a promise to relay
+    `Test-SILab.ps1`'s exact numeric code through Terraform's own apply exit codes,
+    which Terraform does not expose a way to do. New `scripts/scrub-host.sh` removes
+    `.env`, both roots' `.tfstate*`/`.terraform/` (never `.terraform.lock.hcl` — a
+    committed pin, not a secret), the token file, and any rendered answer file/ISO;
+    `host-runner.sh`'s `main` calls it directly on a pass and instead prints its path
+    on a fail, leaving every secret in place for a re-run. `deploy.sh` mirrors this on
+    the operator's side, printing the full remote scrub command with the real host
+    address once the runner exits nonzero — the one thing only `deploy.sh` knows that
+    the runner itself doesn't.
+
+    A real bug caught by testing, not assumed correct: my first cut of `deploy.sh`
+    read `$?` *after* the closing `fi` of `if ssh ...; then exit 0; fi` to decide what
+    to print and exit with — POSIX resets the exit status of an `if` whose condition
+    was false and has no `else` to 0, not the condition's own code, so this version
+    would have always reported success even after a real failure. Confirmed both the
+    bug and the fix by literally running both versions against a function that
+    `return 7`s; the fixed version (`ssh ... || status=$?`, checked as a plain
+    variable afterward) correctly captured and exited `7`. Also confirmed `rm -f`/
+    `rm -rf` against a glob that matches nothing genuinely exits 0 under `set -e`
+    (no `nullglob` needed) before relying on that in `scrub-host.sh`. `terraform fmt`/
+    `validate` green in `terraform/`; `shellcheck` and `bash -n` clean on both
+    scripts. Not executed against a real host — no host exists yet.
 
     Notes:
 

@@ -76,3 +76,33 @@ resource "terraform_data" "wait_cl01" {
     ]
   }
 }
+
+# The deployment's actual verdict (task 10) — only runs once every guest has
+# reached its terminal phase. Test-SILab.ps1 is already on DC01 (vm-dc01.tf's
+# own `file` provisioner copies all of powershell/), is read-only, and exits
+# non-zero if anything it checks is missing — that exit code becomes
+# powershell.exe's own process exit code when run via -File, which is what
+# makes this resource's success or failure the health check's own.
+resource "terraform_data" "run_health_check" {
+  depends_on = [
+    terraform_data.wait_dc01,
+    terraform_data.wait_srv01,
+    terraform_data.wait_cl01,
+  ]
+
+  connection {
+    type     = "winrm"
+    host     = "10.10.20.10"
+    user     = "Administrator"
+    password = var.local_admin_password
+    https    = false
+    use_ntlm = true
+    timeout  = "5m"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Test-SILab.ps1",
+    ]
+  }
+}
