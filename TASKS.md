@@ -2485,7 +2485,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
    Notes:
 
-7. [ ] Make the Bootstrap handoff survive its guest dropping off the network
+7. [x] Make the Bootstrap handoff survive its guest dropping off the network
    **What:** the three `remote-exec` provisioners launch each Bootstrap script so the
    provisioner returns at once, per task 2, and each script writes the completion signal
    task 2 chose after its final phase.
@@ -2500,6 +2500,39 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** no provisioner waits on a script that reboots or re-addresses its guest; no
    launch mechanism stores a credential on the guest's disk; the completion signal is written
    only after the final phase; `terraform validate` and PSScriptAnalyzer pass.
+
+   Notes: task 2's own SPIKE chose `Start-Process` — writing this task's actual code
+   found that mechanism doesn't work and corrected decision 37 in place, not silently.
+   A real, open `PowerShell/PowerShell#16001` issue confirms a WinRM shell's job object
+   kills anything started directly inside it (`Start-Process` included) the instant the
+   shell closes — which Terraform's `remote-exec` does right after the launch command
+   "succeeds," i.e. at exactly the moment a fast, clean return looks like it worked. The
+   actual fix, confirmed against two independent real sources rather than assumed
+   (Packer's own elevated-command provisioner, and Ansible's own Windows docs): a
+   one-shot scheduled task, which Task Scheduler spawns outside any caller's job object
+   entirely. New `Start-SILabDetached` in `powershell/SILab.psm1` registers it, starts
+   it, polls `(Get-ScheduledTask).State -eq 'Running'` to confirm the real process
+   exists before deleting the definition again — a real, narrow exception to "no
+   credential ever written to the guest's disk" (a task definition is a file; deleting
+   it removes future runs, not the instance already handed to Task Scheduler), not a
+   loophole argued around it. All three `vm-*.tf` files now call it through one
+   `-Command` invocation per guest, quoting every value the same single-quote-doubling
+   way `terraform/locals.tf` already established, so nothing here weakens that existing
+   escaping discipline. The completion signal needed no new code at all —
+   `Set-SILabPhase` (Milestone 6) already writes `phase.json` before every
+   reboot-triggering call; DC01's terminal phase is 5, SRV01's is 2, CL01's is 1 (read
+   directly from each script, not assumed), values task 8's runner consumes directly.
+   `powershell-provisioning` skill updated with both the launch mechanism and a Gotchas
+   entry recording the job-object trap, so the next person touching this layer doesn't
+   rediscover it the hard way. Confirmed real, not assumed: round-tripped the
+   single-quote-escaping helper through actual PowerShell argument parsing (a value
+   containing `'` survived intact); `terraform fmt`/`validate` green in `terraform/`;
+   `Invoke-ScriptAnalyzer -Severity Error,Warning` clean on all of `powershell/`, pinned
+   version 1.25.0; `SILab.psm1` parses with zero syntax errors. Residual unknown, left
+   for the Milestone 8 proof run: whether `Unregister-ScheduledTask` genuinely never
+   stops an already-running instance is inferred from Task Scheduler's documented
+   behavior and general precedent, not confirmed against a live Windows box — flagged
+   in the module's own comment, not glossed over.
 
    Notes:
 

@@ -308,6 +308,116 @@ function Assert-SILabPhaseEffect {
     }
 }
 
+function Start-SILabDetached {
+    <#
+    .SYNOPSIS
+        Launches a Bootstrap entry point as a detached process, outside the
+        WinRM shell's own job object, and returns.
+
+    .DESCRIPTION
+        Terraform's WinRM provisioner blocks on the command it runs and tears
+        the session down the instant that command returns - which closes this
+        shell's Windows job object and kills anything started directly inside
+        it, `Start-Process` included (PowerShell/PowerShell#16001). A one-shot
+        scheduled task escapes that job entirely, because Task Scheduler spawns
+        its own process tree outside it - the same mechanism Packer's own
+        elevated-command provisioner and Ansible's Windows modules use for
+        exactly this problem (PLAN.md's orchestration SPIKE). The task
+        definition is deleted again immediately after its process starts, so
+        whatever credential its argument list carries sits on disk for a
+        moment, never longer - the least-bad option available, not a clean
+        one; see the SPIKE for what else was considered and rejected.
+
+    .PARAMETER ScriptPath
+        Full path to the entry point script to launch (e.g. Bootstrap-DC01.ps1).
+
+    .PARAMETER LocalAdminPassword
+        Forwarded to the entry point as -LocalAdminPassword, only if bound.
+
+    .PARAMETER DomainAdminPassword
+        Forwarded to the entry point as -DomainAdminPassword, only if bound.
+
+    .PARAMETER SafeModeAdminPassword
+        Forwarded to the entry point as -SafeModeAdminPassword, only if bound -
+        DC01 only; SRV01 and CL01's entry points have no such parameter, and
+        passing it to them would fail to bind rather than being ignored.
+
+    .EXAMPLE
+        Start-SILabDetached -ScriptPath 'C:\lab-provisioning\Bootstrap-DC01.ps1' -DomainAdminPassword 'x'
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'LocalAdminPassword', Justification = 'Received as a plain command-line argument from Terraform; see the credential decision in PLAN.md.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'DomainAdminPassword', Justification = 'Received as a plain command-line argument from Terraform; see the credential decision in PLAN.md.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'SafeModeAdminPassword', Justification = 'Received as a plain command-line argument from Terraform; see the credential decision in PLAN.md.')]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ScriptPath,
+
+        [string]$LocalAdminPassword,
+
+        [string]$DomainAdminPassword,
+
+        [string]$SafeModeAdminPassword
+    )
+
+    # Doubles an embedded ' the way terraform/locals.tf already does for the
+    # first layer of quoting - this is a second, independent layer (this
+    # value's new home is the scheduled task's own argument string), so it
+    # needs escaping again here rather than trusting the caller's escaping to
+    # still hold.
+    function ConvertTo-SingleQuotedLiteral {
+        param([Parameter(Mandatory)][AllowEmptyString()][string]$Value)
+        return "'" + $Value.Replace("'", "''") + "'"
+    }
+
+    $argumentParts = @('-ExecutionPolicy', 'Bypass', '-File', (ConvertTo-SingleQuotedLiteral $ScriptPath))
+    if ($PSBoundParameters.ContainsKey('LocalAdminPassword')) {
+        $argumentParts += '-LocalAdminPassword', (ConvertTo-SingleQuotedLiteral $LocalAdminPassword)
+    }
+    if ($PSBoundParameters.ContainsKey('DomainAdminPassword')) {
+        $argumentParts += '-DomainAdminPassword', (ConvertTo-SingleQuotedLiteral $DomainAdminPassword)
+    }
+    if ($PSBoundParameters.ContainsKey('SafeModeAdminPassword')) {
+        $argumentParts += '-SafeModeAdminPassword', (ConvertTo-SingleQuotedLiteral $SafeModeAdminPassword)
+    }
+    $taskArgument = $argumentParts -join ' '
+    $taskName = 'SILab-Launch-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
+
+    if (-not $PSCmdlet.ShouldProcess($ScriptPath, 'Launch detached via a one-shot scheduled task')) {
+        return
+    }
+
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $taskArgument
+    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date)
+    $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
+
+    try {
+        Start-ScheduledTask -TaskName $taskName
+
+        # Task Scheduler dispatches asynchronously - wait for the process to
+        # actually start before deleting the definition below, or deletion
+        # can race the launch itself.
+        $deadline = (Get-Date).AddSeconds(30)
+        do {
+            Start-Sleep -Milliseconds 200
+            $state = (Get-ScheduledTask -TaskName $taskName).State
+        } while ($state -ne 'Running' -and (Get-Date) -lt $deadline)
+
+        if ($state -ne 'Running') {
+            throw "Scheduled task '$taskName' did not start within 30 seconds."
+        }
+    }
+    finally {
+        # Removing the definition does not stop the instance Task Scheduler
+        # already launched - only future runs. That instance is now a child
+        # of the Task Scheduler service, not of this WinRM shell, so it
+        # outlives this command and this session either way.
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+    }
+}
+
 Export-ModuleMember -Function @(
     'Start-SILabTranscript',
     'Stop-SILabTranscript',
@@ -316,5 +426,6 @@ Export-ModuleMember -Function @(
     'Assert-SILabPhaseEffect',
     'Set-SILabPhase',
     'Register-SILabResumeTask',
-    'Unregister-SILabResumeTask'
+    'Unregister-SILabResumeTask',
+    'Start-SILabDetached'
 )

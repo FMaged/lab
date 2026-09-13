@@ -885,9 +885,10 @@ where the answer already existed rather than designed from scratch:
   made and documented for port 5985.
 The decision:
 1. Every guest's `remote-exec` provisioner changes to launch its Bootstrap script via
-   `Start-Process ... -WindowStyle Hidden` and returns — Terraform's job ends there,
-   exactly as task 7 puts it: the guest already drives itself across reboots by design,
-   Terraform only needs to start it and get out of the way.
+   `Start-SILabDetached` (`powershell/SILab.psm1`) and returns — Terraform's job ends
+   there, exactly as task 7 puts it: the guest already drives itself across reboots by
+   design, Terraform only needs to start it and get out of the way. See the correction
+   below on why this is a one-shot scheduled task, not `Start-Process`.
 2. The host-side runner polls each guest's `phase.json` over WinRM (`curl --ntlm`) in a
    bash loop with a sleep between attempts. A failed attempt — the guest is mid-reboot
    and unreachable — is just a failed `curl` call retried on the next iteration, never a
@@ -904,18 +905,48 @@ this project otherwise provisions with exactly two pinned, checksum-verified sta
 binaries and nothing else; its maintenance status could not be confirmed live, which
 disqualifies it on its own given every other tool in this repo is checked against its
 current, live state before being trusted.
-Rejected: a scheduled task as the *initial*, credentialed launch mechanism — `schtasks`/
-`Register-ScheduledTask` persists its full argument string, credential included, into
-the Task Scheduler's on-disk task definition under `C:\Windows\System32\Tasks` — the "no
-credential ever written to the guest's disk" rule failing in a new place.
-`Start-Process` never touches disk for this purpose; the argument lives only in the
-child process's own memory, the same standing exposure the current synchronous
-`remote-exec` already accepts by passing credentials as a command line at all.
 Residual unknown: whether `curl --ntlm` against WinRM's raw endpoint needs anything
 beyond `-u user:pass` and the right `Content-Type`/SOAP body to get a usable reply from
 a Windows Server 2025 WinRM listener is unverified until the proof run. The mechanism —
 NTLM auth over HTTP on port 5985 — is identical to what `terraform/vm-dc01.tf`'s own
 connection block already relies on; only the client issuing the request differs.
+
+Correction, found while implementing task 7 (2026-09-13): `Start-Process` does not
+work, and this SPIKE was wrong to pick it. A real, open `PowerShell/PowerShell#16001`
+issue — "Remote sessions terminate Start-Process-launched processes on exit" — confirms
+that a process started directly inside a WinRM/PSRemoting shell is a member of that
+shell's Windows job object, and Windows job objects kill every member the instant the
+job's last handle closes. Terraform's `remote-exec` closes the WinRM shell right after
+the command it ran returns — which, for a `Start-Process` call that succeeds and
+returns immediately, is essentially the same moment the detached child was created. The
+mechanism this SPIKE chose to make the provisioner "return at once" is the exact
+mechanism that gets the detached child killed at that same instant, not a separate
+concern from it.
+The actual fix is the one this SPIKE rejected: a scheduled task. Task Scheduler spawns
+its own process tree outside any caller's job object entirely, which is *why* it
+escapes this problem where `Start-Process` cannot — confirmed independently twice, not
+inferred once: Packer's own `windows-restart`/elevated-command provisioner uses a
+scheduled task (`elevated-template.ps1`) for exactly this reason, and Ansible's own
+Windows documentation names a scheduled task as the standard way to run something over
+WinRM that needs to outlive the calling session. This SPIKE's original objection —
+"a scheduled task persists its argument string, credential included, to disk" — still
+holds, and is not avoidable: no channel from a WinRM-connected process to a
+Task-Scheduler-spawned one avoids disk entirely, since they share no memory and Task
+Scheduler has no "pass this argument once, store nothing" mode. `Start-SILabDetached`
+minimizes rather than eliminates the exposure: it registers the task, starts it,
+confirms (by polling `State -eq 'Running'`) that the real process has actually been
+created, and deletes the task definition immediately afterward — deleting a task does
+not stop an instance already running, since that instance is by then a child of the
+Task Scheduler service, not of the definition being deleted. The credential sits in a
+file on disk for at most a couple of hundred milliseconds, never across a reboot and
+never as standing state, which is the narrowest exception to "no credential is ever
+written to the guest's disk" this project has taken — a real exception, not a loophole
+argued around it, since a task definition is unambiguously a file. `on_failure =
+"continue"` on the provisioner was considered as an alternative fix and rejected: it
+stops a genuinely dead reboot-interrupted connection from tainting the resource, but
+the provisioner still blocks for up to its own connection `timeout` (10 minutes) before
+giving up, which fails task 7's actual Accept criterion — "no provisioner waits" —
+even though it would have solved the tainting half well enough on its own.
 
 ### The Packer/Terraform build runs on the Proxmox host itself; deploy.sh is a thin SSH wrapper around it
 

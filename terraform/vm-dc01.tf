@@ -94,11 +94,16 @@ resource "proxmox_virtual_environment_vm" "dc01" {
     destination = "C:/lab-provisioning"
   }
 
+  # Launches detached via Start-SILabDetached (SILab.psm1) and returns at
+  # once — Bootstrap-DC01.ps1 reboots on its own across five phases, and a
+  # provisioner that waited on it directly would have this shell's WinRM job
+  # object kill the very process it just started the moment the command
+  # "succeeds" and the session closes (PLAN.md's orchestration SPIKE).
   # SafeModeAdminPassword is DC01-only — SRV01/CL01 have no forest to
   # recover, so neither invocation takes this argument.
   provisioner "remote-exec" {
     inline = [
-      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-DC01.ps1 -LocalAdminPassword '${local.ps_local_admin_password}' -DomainAdminPassword '${local.ps_domain_admin_password}' -SafeModeAdminPassword '${local.ps_dsrm_recovery_password}'",
+      "powershell -ExecutionPolicy Bypass -Command \"Import-Module C:/lab-provisioning/SILab.psm1 -Force; Start-SILabDetached -ScriptPath 'C:/lab-provisioning/Bootstrap-DC01.ps1' -LocalAdminPassword '${local.ps_local_admin_password}' -DomainAdminPassword '${local.ps_domain_admin_password}' -SafeModeAdminPassword '${local.ps_dsrm_recovery_password}'\"",
     ]
   }
 }

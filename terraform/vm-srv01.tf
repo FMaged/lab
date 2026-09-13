@@ -64,9 +64,10 @@ resource "proxmox_virtual_environment_vm" "srv01" {
     destination = "C:/lab-provisioning"
   }
 
+  # Launches detached via Start-SILabDetached — see the comment in vm-dc01.tf.
   provisioner "remote-exec" {
     inline = [
-      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-SRV01.ps1 -LocalAdminPassword '${local.ps_local_admin_password}' -DomainAdminPassword '${local.ps_domain_admin_password}'",
+      "powershell -ExecutionPolicy Bypass -Command \"Import-Module C:/lab-provisioning/SILab.psm1 -Force; Start-SILabDetached -ScriptPath 'C:/lab-provisioning/Bootstrap-SRV01.ps1' -LocalAdminPassword '${local.ps_local_admin_password}' -DomainAdminPassword '${local.ps_domain_admin_password}'\"",
     ]
   }
 }
