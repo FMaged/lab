@@ -889,27 +889,27 @@ The decision:
    there, exactly as task 7 puts it: the guest already drives itself across reboots by
    design, Terraform only needs to start it and get out of the way. See the correction
    below on why this is a one-shot scheduled task, not `Start-Process`.
-2. The host-side runner polls each guest's `phase.json` over WinRM (`curl --ntlm`) in a
-   bash loop with a sleep between attempts. A failed attempt — the guest is mid-reboot
-   and unreachable — is just a failed `curl` call retried on the next iteration, never a
-   Terraform provisioner failure and never a tainted resource.
-3. Once every guest's phase file reports its terminal phase, the runner copies and runs
-   `Test-SILab.ps1` on DC01 the same way; its exit code becomes the whole deployment's
-   exit code (task 10).
-Rejected: a `terraform_data` resource reusing Terraform's own WinRM client for the poll
-loop — real and supported, but turns "wait for completion" into a shell loop invoking
-`terraform apply` repeatedly, paying a full provider/state cycle for one remote command,
-and splits the polling logic across two languages the runner has to drive either way.
+2. The host-side runner polls each guest's `phase.json` by repeatedly applying that
+   guest's `terraform_data` resource (`terraform/wait-for-guests.tf`) with `-replace`,
+   in a bash loop with a sleep between attempts. See the second correction below on why
+   this is `terraform_data`, not `curl --ntlm`. A failed attempt — the guest is
+   mid-reboot and unreachable, or not yet on its terminal phase — is just a nonzero
+   `terraform apply` retried on the next iteration, never a tainted resource, because
+   `wait_dc01`/`wait_srv01`/`wait_cl01` are their own resources, entirely separate from
+   the guest VMs themselves.
+3. Once every guest's phase file reports its terminal phase, the runner runs
+   `Test-SILab.ps1` on DC01 the same way (task 10 adds that `terraform_data` resource);
+   its exit code becomes the whole deployment's exit code.
 Rejected: `pywinrm` — works, but adds a pip dependency and a Python runtime to a host
 this project otherwise provisions with exactly two pinned, checksum-verified static
 binaries and nothing else; its maintenance status could not be confirmed live, which
 disqualifies it on its own given every other tool in this repo is checked against its
 current, live state before being trusted.
-Residual unknown: whether `curl --ntlm` against WinRM's raw endpoint needs anything
-beyond `-u user:pass` and the right `Content-Type`/SOAP body to get a usable reply from
-a Windows Server 2025 WinRM listener is unverified until the proof run. The mechanism —
-NTLM auth over HTTP on port 5985 — is identical to what `terraform/vm-dc01.tf`'s own
-connection block already relies on; only the client issuing the request differs.
+Residual unknown: whether repeatedly `-replace`ing a `terraform_data` resource behaves
+exactly like a fresh, independent connection attempt every time, with no leftover state
+from a prior failed attempt affecting the next one, is unverified until the proof run —
+plausible from how `-replace` is documented to force recreation, but not something to
+overstate confidence in without a live guest to poll against.
 
 Correction, found while implementing task 7 (2026-09-13): `Start-Process` does not
 work, and this SPIKE was wrong to pick it. A real, open `PowerShell/PowerShell#16001`
@@ -947,6 +947,37 @@ stops a genuinely dead reboot-interrupted connection from tainting the resource,
 the provisioner still blocks for up to its own connection `timeout` (10 minutes) before
 giving up, which fails task 7's actual Accept criterion — "no provisioner waits" —
 even though it would have solved the tainting half well enough on its own.
+
+Second correction, found while implementing task 8 (2026-09-13): the polling half of
+this SPIKE was also wrong, for a more basic reason than the launch half was — `curl
+--ntlm` cannot poll `phase.json` at all. WinRM is a SOAP-over-HTTP protocol
+(WS-Management): reading a remote file means a `CreateShell` call, a `Command` call
+naming what to run, one or more `Receive` calls for its output, then `Signal` and
+`Delete` to close the shell, each its own XML envelope with its own message IDs. `curl
+--ntlm` only carries the transport and the NTLM handshake underneath that exchange; it
+has no idea the exchange needs to happen at all. Realizing this while writing the
+runner's actual poll loop, not while researching the SPIKE, is exactly the gap "confirm
+this works, don't assume it" is supposed to catch, and here it caught a decision that
+sounded plausible but was never actually tested against what `curl` does and does not
+speak.
+The fix reaches back into the two rejected alternatives, not past them: `terraform_data`
+resources (`terraform/wait-for-guests.tf`), one per guest, each with the same WinRM
+`connection` block its own guest resource already has and a `remote-exec` provisioner
+that reads `phase.json` and exits non-zero unless the number has reached that guest's
+terminal phase. The host-side runner polls with `terraform apply
+-target=terraform_data.wait_dc01 -replace=terraform_data.wait_dc01` (and the same for
+`wait_srv01`/`wait_cl01`) in a bash loop with a sleep between attempts — `-replace`
+forces a fresh connection attempt and a fresh provisioner run every time, exactly the
+"retry" this needs, and Terraform's own exit code (0 once the phase check passes, or
+whenever the guest is unreachable) is the only thing the loop has to inspect. The
+overhead this SPIKE worried about — a provider-init/plan/apply cycle per attempt — is
+real but was weighed wrong the first time: a few seconds of Terraform overhead against
+a multi-minute reboot wait is not the cost this SPIKE should have optimized away, a
+working polling mechanism is. `pywinrm`'s rejection stands for its own, separate
+reason (unconfirmable maintenance) and was never really in competition with `curl` on
+correctness — both get rejected now, for different reasons, and `terraform_data` is
+the one candidate left that was already proven to actually speak WinRM, because it is
+the exact mechanism `terraform/vm-dc01.tf` already depends on today.
 
 ### The Packer/Terraform build runs on the Proxmox host itself; deploy.sh is a thin SSH wrapper around it
 

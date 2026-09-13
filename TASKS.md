@@ -2347,6 +2347,11 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    a known, long-standing class of issue, not a config flag away from fixed.
    Decision in PLAN.md.
 
+   Both choices above were corrected later, in place, once actually implemented —
+   `Start-Process` in task 7, `curl --ntlm` in task 8. Neither this task's text nor
+   this note is rewritten (`AGENTS.md`); see PLAN.md's decision 37 for both
+   corrections and what replaced each.
+
 3. [x] Record this milestone's decisions in PLAN.md
    **What:** entries for where the build runs, how the server is rented and released, where
    the ISOs come from, and both spikes' outcomes, with the orchestration decision amended.
@@ -2536,7 +2541,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
 
    Notes:
 
-8. [ ] Write the host-side runner
+8. [x] Write the host-side runner
    **What:** a script that runs on the Proxmox host and takes it from freshly installed to
    three built templates and four applied VMs, in order, skipping any stage whose result
    already exists.
@@ -2553,6 +2558,43 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    **Accept:** the stages run in runbook order, sections 2 to 5; every stage checks for its
    result before acting; tool versions and checksums are pinned exactly; no step disables
    TLS verification; `shellcheck` passes.
+
+   Notes: `scripts/host-runner.sh`, stages in order: trust `pve-root-ca` and add a
+   `/etc/hosts` entry for `pve.silab.internal` (`example.env`'s endpoint placeholders
+   now point there directly, a fixed value from `proxmox/answer.toml`'s own `fqdn` —
+   nothing host-specific to substitute at runtime); install Terraform/Packer via
+   HashiCorp's own documented SHA256SUMS+GPG-signature flow
+   (`developer.hashicorp.com/well-architected-framework/verify-hashicorp-binary`), not
+   a hardcoded checksum, since a value I couldn't independently verify felt worse than
+   verifying against the vendor's own signed manifest at run time; create
+   `vmbr1`/`vmbr2` and start `dnsmasq` on the build network (task 1's SPIKE); merge
+   `/root/proxmox-api-tokens.txt` into `.env`; download and decompress OPNsense's
+   `.iso.bz2` by hand (task 5); build only the templates that don't already exist,
+   via `packer build -only=...` after checking each VMID with `qm status`; apply the
+   firewall; apply DC01 and wait, then SRV01+CL01 and wait.
+
+   A real gap surfaced while writing the wait step, not while researching the
+   SPIKE: `curl --ntlm` (PLAN.md decision 37's original choice) cannot poll
+   `phase.json` at all — WinRM is a SOAP protocol with its own
+   CreateShell/Command/Receive sequence, and `curl --ntlm` only carries the
+   transport underneath that. New `terraform/wait-for-guests.tf` adds one
+   `terraform_data` resource per guest instead, reusing Terraform's own WinRM
+   client via `terraform apply -target=... -replace=...` in a bash loop — see
+   PLAN.md's second correction to decision 37. Confirmed real, not assumed:
+   tested `-replace` against a scratch `terraform_data` resource locally, both
+   on a resource that doesn't exist yet (creates it, no error) and one that
+   does (destroys and recreates it) — exactly the retry semantics the loop
+   needs. `stage_build_templates`'s per-VMID `-only` selection tested against
+   mocked `qm`/`packer` commands, confirming it builds only the missing
+   template. Also fixed while writing this: a `RETURN` trap intended to clean
+   up each download's temp directory turned out to re-fire on every
+   *enclosing* function's return too, not just its own — real, working bash
+   behavior, just not the scoped cleanup it looked like; replaced with a
+   plain `rm -rf` at each function's natural end and error exit instead.
+   `shellcheck` and `bash -n` both clean. Residual unknown, unavoidable
+   without a live host: the actual `qm`/`pvesh`/`ifreload`/`dnsmasq` commands,
+   the HashiCorp release URLs, and the WinRM poll loop are all unexecuted —
+   consistent with every other layer in this repo.
 
    Notes:
 
