@@ -2347,7 +2347,7 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    a known, long-standing class of issue, not a config flag away from fixed.
    Decision in PLAN.md.
 
-3. [ ] Record this milestone's decisions in PLAN.md
+3. [x] Record this milestone's decisions in PLAN.md
    **What:** entries for where the build runs, how the server is rented and released, where
    the ISOs come from, and both spikes' outcomes, with the orchestration decision amended.
    **Why:** "The Proxmox host installs itself from an answer file; its tokens travel to the
@@ -2365,7 +2365,12 @@ Branch this milestone per `docs/conventions.md`: one branch, one commit per task
    what still stands; every new entry has a Why and at least one Rejected; the decision
    index regenerates with every anchor resolving.
 
-   Notes:
+   Notes: decision 34 now carries `Amended by:` pointing at the new decision 38, which
+   keeps its installer finding untouched and supersedes only the orchestration-location
+   and token-delivery half. Decisions 36-38 added (tasks 1, 2 and this one), each with
+   a Why and at least one Rejected, `Amended by:`/`See also` links resolving both ways.
+   Confirmed real, not assumed: `check-markdown-links.py` passes, which is what keeps
+   the generated decision index and every cross-reference honest.
 
 4. [ ] Make every Packer build reachable from the host
    **What:** both Windows answer files install the QEMU guest agent before WinRM comes up,

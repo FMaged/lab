@@ -954,6 +954,11 @@ Rejected: driving the build through the Proxmox API's own remote surface (`pvesh
 REST API) as a jump point from the operator's machine — the API can create and manage
 VMs remotely, but Packer's and Terraform's own communicators still need a direct
 network path to the guest for WinRM, which the API does not provide.
+Rejected: automating the rental and release of the server through the hosting
+provider's own API — renting and releasing were never the slow or error-prone half of
+this milestone, and automating them would put a provider API key somewhere this
+project has to keep it, which is exactly the credential the secrets decision keeps out
+of `.env`. Both stay a human clicking a button in the provider's console.
 Rejected: uploading ISOs from the operator's workstation — the default implication of
 every earlier plan; explicitly rejected now that the build runs on the host anyway,
 since datacenter-to-datacenter bandwidth for four multi-gigabyte images strictly beats
