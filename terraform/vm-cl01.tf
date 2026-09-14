@@ -1,4 +1,4 @@
-# A separate lookup from vm-dc01.tf's — CL01 clones the Windows 11 template.
+# CL01 clones the Windows 11 template — a separate lookup from vm-dc01.tf's.
 data "proxmox_virtual_environment_vms" "win11_template" {
   filter {
     name   = "name"
@@ -29,9 +29,7 @@ resource "proxmox_virtual_environment_vm" "cl01" {
     full  = true
   }
 
-  # See the comment in vm-dc01.tf — matters more here: if TPM/Secure Boot
-  # silently dropped on clone, Windows 11 fails to boot outright. Matches
-  # packer/windows-11.pkr.hcl's source block exactly.
+  # See the comment in vm-dc01.tf — matters more here: dropped TPM/Secure Boot fails Windows 11 to boot outright.
   machine = "q35"
   bios    = "ovmf"
 
@@ -42,8 +40,7 @@ resource "proxmox_virtual_environment_vm" "cl01" {
     pre_enrolled_keys = true
   }
 
-  # Windows 11 requires a TPM as well as Secure Boot. The firmware side is the
-  # efi_disk block above; this is the other half.
+  # Windows 11 requires a TPM as well as Secure Boot; efi_disk above is the other half.
   tpm_state {
     datastore_id = var.guest_datastore
     version      = "v2.0"
@@ -67,16 +64,14 @@ resource "proxmox_virtual_environment_vm" "cl01" {
     size         = 64 # matches the template's own disk size in packer/windows-11.pkr.hcl.
   }
 
-  # CL01 stays on DHCP permanently (docs/network-design.md) — unlike DC01/SRV01,
-  # this MAC only keys the DHCP reservation, never becomes a static address.
+  # CL01 stays on DHCP permanently — this MAC only keys the reservation, never becomes a static address.
   network_device {
     bridge      = var.proxmox_bridge_trunk
     vlan_id     = var.network_vlan_clients
     mac_address = "02:00:00:00:01:2D" # docs/conventions.md — VMID 301.
   }
 
-  # See the comment in vm-dc01.tf. Host is CL01's DHCP-reservation address —
-  # its only address, since CL01 stays on DHCP permanently.
+  # See the comment in vm-dc01.tf. Host is CL01's only address, since it stays on DHCP permanently.
   connection {
     type     = "winrm"
     host     = "10.10.30.50"

@@ -1,13 +1,7 @@
 #!/bin/bash
-# Runs exactly once, via proxmox/answer.toml's [first-boot] "fully-up"
-# ordering — Proxmox's own docs guarantee pvesh is available at that point,
-# and the proxmox-first-boot package prevents this from running a second
-# time. Mints one API token per tool, per the secrets decision in PLAN.md, so
-# either can be revoked without touching the other, and writes them to a
-# root-only file rather than sending them anywhere itself — the operator
-# fetches them over the same SSH connection the host firewall already
-# allow-lists (PLAN.md's zero-touch SPIKE decision). This script is the
-# minting mechanism only, never the delivery one.
+# Runs once via answer.toml's [first-boot]; the proxmox-first-boot package prevents a second run.
+# Mints one API token per tool so either can be revoked without touching the other, and writes them
+# to a root-only file rather than sending them anywhere — the operator fetches them over SSH.
 set -euo pipefail
 
 output_file="/root/proxmox-api-tokens.txt"

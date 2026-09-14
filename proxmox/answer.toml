@@ -1,9 +1,5 @@
-# Rendered by scripts/prepare-proxmox-iso.sh (envsubst-style ${VAR} placeholders
-# from .env) and embedded into a prepared installer ISO by
-# proxmox-auto-install-assistant — see the zero-touch decision in PLAN.md. The
-# rendered file and the prepared ISO are both gitignored: this template is the
-# only copy that ever reaches git, and it holds a password hash, not the
-# plaintext.
+# Rendered by scripts/prepare-proxmox-iso.sh and embedded into a prepared installer ISO. This
+# template is the only copy that reaches git — it holds a password hash, not the plaintext.
 #
 # Schema: https://pve.proxmox.com/wiki/Automated_Installation
 
@@ -16,20 +12,13 @@ timezone             = "Europe/Berlin"
 root-password-hashed = "${PROXMOX_ROOT_PASSWORD_HASH}"
 
 [network]
-# The provider's own uplink, not a lab address — 10.10.10.1 is OPNsense's
-# Management gateway, and OPNsense does not exist yet at install time (host-
-# network SPIKE, PLAN.md). "from-dhcp" forbids every other network key, so
-# there is no cidr/gateway/dns to set here at all. The host's own 10.10.10.2 on
-# VLAN 10 is added afterward, by the host-side runner's first stage, once
-# vmbr1 exists — see docs/network-design.md.
+# The provider's own uplink, not a lab address — OPNsense doesn't exist yet at install time.
+# The host's own 10.10.10.2 on VLAN 10 is added afterward, once host-runner.sh creates vmbr1.
 source = "from-dhcp"
 
 [disk-setup]
 filesystem = "ext4"
-# "sda" is a placeholder — the real rented server's boot-disk device name is
-# unconfirmed until Milestone 8 task 1 picks a specific product. Adjust
-# scripts/prepare-proxmox-iso.sh's rendering or this file directly once known.
-disk-list = ["sda"]
+disk-list = ["sda"] # placeholder — the real rented server's boot-disk device name is unconfirmed.
 
 [first-boot]
 source   = "from-iso"

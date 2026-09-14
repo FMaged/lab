@@ -16,11 +16,7 @@ variable "network_vlan_clients" {
   default     = 30
 }
 
-# OPNsense's own key per assigned interface, not the VLAN ID — fixed by
-# packer/files/config.xml, which is what actually assigns opt1/opt2/opt3 to
-# the three VLAN devices now (PLAN.md's zero-touch decision). No longer a
-# guess pending a manual runbook step; change the template, not this default,
-# if it ever needs to differ.
+# OPNsense's own key per assigned interface, not the VLAN ID — fixed by packer/files/config.xml.
 
 variable "opnsense_interface_management" {
   type        = string

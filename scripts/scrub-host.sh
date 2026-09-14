@@ -1,20 +1,12 @@
 #!/usr/bin/env bash
-# Removes every secret this deployment leaves on the host: .env, both
-# Terraform roots' state (whose connection blocks put the guest passwords in
-# it — Terraform marks them sensitive for display, but the state file itself
-# is not encrypted at rest), the first-boot hook's token file if it's still
-# there, and any rendered Proxmox answer file or prepared installer ISO.
-# Runs on the host itself, on its own — nothing to lose by running it twice
-# (task 10, PLAN.md). Releasing the rented server by hand does not guarantee
-# the provider wipes its disks, so this runs before that happens, not instead
-# of it.
+# Deletes every secret this deployment left on the host; safe to run twice.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 rm -f "${repo_root}/.env"
 
-# .terraform.lock.hcl stays — it is a committed provider pin, not a secret.
+# State holds guest passwords unencrypted; .terraform.lock.hcl is a committed pin and stays.
 rm -rf "${repo_root}/terraform/.terraform" "${repo_root}"/terraform/terraform.tfstate*
 rm -rf "${repo_root}/opnsense/.terraform" "${repo_root}"/opnsense/terraform.tfstate*
 

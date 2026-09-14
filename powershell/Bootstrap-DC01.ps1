@@ -1,12 +1,7 @@
 #Requires -Version 5.1
 [CmdletBinding()]
-# All three arrive as plain strings - Terraform passes CLI args, no SecureString
-# (PLAN.md credential decision). LocalAdminPassword is unused here (every
-# guest's script takes the same fixed parameters, AGENTS.md). DomainAdminPassword
-# IS used: a new forest's local Administrator becomes its domain Administrator,
-# carrying over whatever password it had at promotion - phase 2 resets the local
-# account to this password first, which is how SRV01/CL01 join as 'Administrator'
-# with the same password (task 7).
+# All three arrive as plain strings, not SecureString - Terraform passes them as CLI args.
+# LocalAdminPassword is unused here; every guest script takes the same fixed parameters.
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'LocalAdminPassword', Justification = 'Terraform passes this as a plain command-line argument; see the credential decision in PLAN.md.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'DomainAdminPassword', Justification = 'Terraform passes this as a plain command-line argument; see the credential decision in PLAN.md.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'SafeModeAdminPassword', Justification = 'Terraform passes this as a plain command-line argument; see the credential decision in PLAN.md.')]
@@ -29,8 +24,7 @@ $script:ResumeTaskName = 'SILab-Resume-DC01'
 $script:StaticAddress = '10.10.20.10'
 $script:PrefixLength = 24
 $script:DefaultGateway = '10.10.20.1'
-# OPNsense's own resolver - DC01 isn't authoritative for itself yet (only true
-# once promotion, task 4, has run), so this points DNS at something that works.
+# OPNsense's own resolver - DC01 isn't authoritative for itself until after promotion.
 $script:BootstrapDnsServer = '10.10.20.1'
 
 # docs/ad-design.md.
@@ -100,14 +94,10 @@ function Set-SILabSecurityTemplate {
         Writes Account Policy / Audit Policy settings into a GPO's GptTmpl.inf.
 
     .DESCRIPTION
-        The GroupPolicy module's own cmdlets (Set-GPRegistryValue) only reach
-        Administrative Template and Preference registry values. Account
-        Policies and legacy audit categories live in a GPO's Security
-        Settings instead (GptTmpl.inf on SYSVOL), which has no dedicated
-        cmdlet - this writes that file directly and wires the Security
-        Settings client-side extension onto the GPO's AD object, since a
-        freshly created GPO has no extensions registered and would
-        otherwise never have this file read at all.
+        Set-GPRegistryValue only reaches Administrative Template and Preference values.
+        Account Policies and audit categories live in GptTmpl.inf on SYSVOL instead, which
+        has no dedicated cmdlet - this writes it directly and wires the Security Settings
+        client-side extension onto the GPO's AD object, since a fresh GPO has none registered.
 
     .PARAMETER Gpo
         The GPO object from New-GPO/Get-GPO to write the template into.
@@ -139,15 +129,12 @@ function Set-SILabSecurityTemplate {
     }
 
     $body = "[Unicode]`r`nUnicode=yes`r`n[Version]`r`nsignature=`"`$CHICAGO`$`"`r`nRevision=1`r`n$IniContent`r`n"
-    # Saved as Unicode (UTF-16LE with BOM) to match the [Unicode] header -
-    # unverified against a real GPMC-authored file until the Milestone 8 proof run.
+    # UTF-16LE with BOM to match the [Unicode] header; unverified against a real GPMC-authored file.
     $unicodeEncoding = New-Object -TypeName System.Text.UnicodeEncoding -ArgumentList $false, $true
     [System.IO.File]::WriteAllText($templatePath, $body, $unicodeEncoding)
 
-    # A brand-new GPO has no client-side extensions registered, so the policy
-    # engine would never read GptTmpl.inf without this. versionNumber packs
-    # (machineVersion << 16 | userVersion); 65536 is exact here since this GPO
-    # has no prior version - a second call would need to read the existing value first.
+    # versionNumber packs (machineVersion << 16 | userVersion); 65536 is exact since this GPO is new -
+    # a second call would need to read the existing value first.
     Set-ADObject -Identity $Gpo.Path -Replace @{
         gPCMachineExtensionNames = '[{827D319E-6EAC-11D2-A4EA-00C04F79F83A}{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}]'
         versionNumber            = 65536
@@ -208,8 +195,7 @@ function New-SILabWorkstationBaselineGPO {
         Set-GPRegistryValue -Guid $gpo.Id -Key 'HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System' `
             -ValueName 'LegalNoticeText' -Type String -Value 'Authorized use only.' | Out-Null
 
-        # docs/ad-design.md names the setting, not a specific image - this
-        # project has no wallpaper asset, so the stock Windows 11 default stands in.
+        # docs/ad-design.md names the setting, not a specific image; the stock Windows 11 default stands in.
         Set-GPRegistryValue -Guid $gpo.Id -Key 'HKCU\Software\Policies\Microsoft\Windows\Desktop' `
             -ValueName 'Wallpaper' -Type String -Value 'C:\Windows\Web\Wallpaper\Windows\img0.jpg' | Out-Null
         Set-GPRegistryValue -Guid $gpo.Id -Key 'HKCU\Software\Policies\Microsoft\Windows\Desktop' `
@@ -246,9 +232,7 @@ function New-SILabServerBaselineGPO {
 
         Set-GPRegistryValue -Guid $gpo.Id -Key 'HKLM\Software\Policies\Microsoft\WindowsFirewall\DomainProfile' `
             -ValueName 'EnableFirewall' -Type DWord -Value 1 | Out-Null
-        # GP Preference, not an Administrative Template policy - there's no
-        # ADMX-backed policy for SMB1 since it's normally toggled as a Windows
-        # feature, not a registry value.
+        # GP Preference, not an ADMX policy - SMB1 is normally toggled as a Windows feature, not a registry value.
         Set-GPRegistryValue -Guid $gpo.Id -Key 'HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters' `
             -ValueName 'SMB1' -Type DWord -Value 0 | Out-Null
 
@@ -267,10 +251,7 @@ function New-SILabServerBaselineGPO {
 Start-SILabTranscript -ScriptName 'Bootstrap-DC01'
 
 try {
-    # Phase 2's marker is written before Install-ADDSForest, which reboots on
-    # its own - a failed promotion leaves phase 2 marked complete, so the resume
-    # walks into phase 3 against a forest that doesn't exist. DomainRole 4/5 =
-    # backup/primary domain controller.
+    # DomainRole 4/5 = backup/primary domain controller.
     Assert-SILabPhaseEffect -Number 2 -Name 'Promotion' -Test {
         (Get-CimInstance -ClassName Win32_ComputerSystem).DomainRole -in @(4, 5)
     }
@@ -292,22 +273,16 @@ try {
             -PrefixLength $script:PrefixLength -DefaultGateway $script:DefaultGateway | Out-Null
         Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses $script:BootstrapDnsServer
 
-        # Deliberately no Restart-Computer here - the recovery password that
-        # phase 2 (promotion) needs arrives only as a one-shot CLI argument from
-        # Terraform, and can't survive a reboot without hitting disk (PLAN.md
-        # secrets decision). Install-ADDSForest's own reboot finalizes this
-        # pending rename together with promotion, so DC01 reboots once before the
-        # forest exists, not twice (PLAN.md credential-ordering; TASKS.md task 3).
+        # No Restart-Computer here - Install-ADDSForest's own reboot finalizes this pending rename
+        # together with promotion, so DC01 reboots once, not twice.
         Set-SILabPhase -Number 1 -Name 'Addressing'
     }
 
     if (-not (Test-SILabPhaseComplete -Number 2)) {
         Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools | Out-Null
 
-        # A new forest's local Administrator becomes the domain Administrator,
-        # carrying over its current password - so this is set before promoting,
-        # not after (changing it afterward would need this same password to
-        # survive the reboot, and nothing may persist a credential to disk). Feeds task 7.
+        # The local Administrator becomes the domain Administrator on promotion, carrying over
+        # its current password - set before promoting, not after.
         $secureDomainAdminPassword = ConvertTo-SecureString -String $DomainAdminPassword -AsPlainText -Force
         Set-LocalUser -Name 'Administrator' -Password $secureDomainAdminPassword
 
@@ -317,9 +292,8 @@ try {
         Set-SILabPhase -Number 2 -Name 'Promotion'
         Register-SILabResumeTask -TaskName $script:ResumeTaskName -ScriptPath $PSCommandPath
 
-        # 'Win2025' is this project's best reading of docs/ad-design.md's
-        # "functional level 2025" requirement - unconfirmed against a real
-        # Windows Server 2025 AD DS module until the Milestone 8 proof run.
+        # 'Win2025' is this project's best reading of docs/ad-design.md's "functional level 2025";
+        # unconfirmed against a real Windows Server 2025 AD DS module.
         Install-ADDSForest `
             -DomainName $script:ForestDomainName `
             -DomainNetbiosName $script:DomainNetbiosName `
@@ -331,21 +305,17 @@ try {
             -Force `
             -Confirm:$false
 
-        # Last phase on DC01 with any credential - everything after runs as SYSTEM
-        # on a domain controller, which already holds the rights it needs (PLAN.md).
+        # Last phase on DC01 with any credential - everything after runs as SYSTEM on a DC.
     }
 
     if (-not (Test-SILabPhaseComplete -Number 3)) {
-        # Resumed after promotion's reboot - the forest exists, so this and every
-        # later phase needs no credential or reboot of its own.
         $existingSite = Get-ADReplicationSite -Filter "Name -eq '$script:SiteName'" -ErrorAction SilentlyContinue
         if ($null -eq $existingSite) {
             Get-ADReplicationSite -Filter "Name -eq 'Default-First-Site-Name'" |
                 Rename-ADObject -NewName $script:SiteName
         }
 
-        # DC01 is authoritative for its own domain now - point its DNS client at
-        # itself instead of phase 1's bootstrap resolver, and forward everything else.
+        # Point DNS at itself now instead of phase 1's bootstrap resolver, and forward everything else.
         $adapter = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
         Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses $script:StaticAddress
         Set-DnsServerForwarder -IPAddress $script:DefaultGateway -PassThru | Out-Null
@@ -354,10 +324,7 @@ try {
     }
 
     if (-not (Test-SILabPhaseComplete -Number 4)) {
-        # Parents created before children - a retried phase may find some of the
-        # tree already present, which New-SILabOrganizationalUnit's existence
-        # check makes safe. Built-in Domain Controllers OU is never touched
-        # (docs/ad-design.md keeps DC01 there).
+        # Parents created before children; New-SILabOrganizationalUnit's existence check makes a retry safe.
         $domainDN = (Get-ADDomain).DistinguishedName
 
         New-SILabOrganizationalUnit -Name 'SILAB' -Path $domainDN

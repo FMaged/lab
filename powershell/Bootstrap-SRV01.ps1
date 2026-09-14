@@ -1,9 +1,7 @@
 #Requires -Version 5.1
 [CmdletBinding()]
-# Both arrive as plain strings - Terraform passes CLI args, no SecureString
-# (PLAN.md credential decision). LocalAdminPassword is unused here (every
-# guest's script takes the same fixed parameters, AGENTS.md); DomainAdminPassword
-# is used by phase 2 below.
+# Both arrive as plain strings, not SecureString - Terraform passes them as CLI args.
+# LocalAdminPassword is unused here; every guest script takes the same fixed parameters.
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'LocalAdminPassword', Justification = 'Terraform passes this as a plain command-line argument; see the credential decision in PLAN.md.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'DomainAdminPassword', Justification = 'Terraform passes this as a plain command-line argument; see the credential decision in PLAN.md.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '', Justification = 'The domain admin password arrives as a plain command-line argument and is converted to a SecureString on first use; see the credential decision in PLAN.md.')]
@@ -37,9 +35,7 @@ function Wait-SILabDomainController {
         Blocks until a domain controller answers on LDAP.
 
     .DESCRIPTION
-        A member booting before DC01 finishes promoting is a normal race, not
-        a failure - this is what lets the join phase wait it out instead of
-        failing on the first attempt.
+        A member booting before DC01 finishes promoting is a normal race, not a failure.
 
     .PARAMETER ComputerName
         The domain controller's FQDN to test.
@@ -69,8 +65,6 @@ function Wait-SILabDomainController {
 Start-SILabTranscript -ScriptName 'Bootstrap-SRV01'
 
 try {
-    # Phase 2's marker is written before Add-Computer -Restart, so a failed
-    # join leaves it marked complete - phase 1 has no reboot, so needs no guard.
     Assert-SILabPhaseEffect -Number 2 -Name 'DomainJoin' -Test {
         (Get-CimInstance -ClassName Win32_ComputerSystem).PartOfDomain
     }
@@ -88,9 +82,7 @@ try {
             -PrefixLength $script:PrefixLength -DefaultGateway $script:DefaultGateway | Out-Null
         Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses $script:DnsServer
 
-        # No rename/reboot here - the hostname changes via Add-Computer -NewName
-        # during the join instead, so the join credential is consumed in the same
-        # invocation it arrives in and never has to survive a reboot (PLAN.md).
+        # No rename/reboot here - the hostname changes via Add-Computer -NewName during the join instead.
         Set-SILabPhase -Number 1 -Name 'Addressing'
     }
 
@@ -98,9 +90,7 @@ try {
         Wait-SILabDomainController
 
         $securePassword = ConvertTo-SecureString -String $DomainAdminPassword -AsPlainText -Force
-        # UPN built from the domain name defined above, not a second literal - a
-        # bare 'Administrator' can resolve to the local account instead, which
-        # fails without saying why on an unjoined machine.
+        # UPN, not a bare 'Administrator' - that can resolve to the local account instead.
         $credential = New-Object -TypeName System.Management.Automation.PSCredential `
             -ArgumentList "Administrator@$($script:ForestDomainName)", $securePassword
 
@@ -108,16 +98,11 @@ try {
         Set-SILabPhase -Number 2 -Name 'DomainJoin'
         Register-SILabResumeTask -TaskName $script:ResumeTaskName -ScriptPath $PSCommandPath
 
-        # -NewName joins and renames in one operation, landing the computer object
-        # directly in Computers/Servers instead of the default container - see
-        # the credential-ordering note on task 3 for why this replaces Rename-Computer.
+        # -NewName joins and renames in one operation, landing the computer object in Computers/Servers directly.
         Add-Computer -NewName 'SRV01' -DomainName $script:ForestDomainName -Credential $credential `
             -OUPath $script:TargetOU -Restart -Force -Confirm:$false
-
-        # The join credential is consumed here and nowhere else on SRV01.
     }
     else {
-        # Resumed after the join's reboot - nothing left to do but tidy up.
         Unregister-SILabResumeTask -TaskName $script:ResumeTaskName
     }
 }

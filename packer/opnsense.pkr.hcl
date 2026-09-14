@@ -1,19 +1,9 @@
-# The bootstrap password config.xml's root user is built with — fixed and
-# non-secret (same value the two Windows answer files use), never the real
-# secret in .env. See the correction on PLAN.md's OPNsense SPIKE decision for
-# why boot_command has to type something real here at all.
+# Fixed, non-secret bootstrap password for config.xml's root user, never the real secret in .env.
 locals {
   opnsense_bootstrap_password      = "Pa$$w0rd-PackerBuild!"
   opnsense_bootstrap_password_hash = "$6$silabbootstrap01$je7lSx/SpZ64HHPPxIIE0W7LSPrjqvRi3RlLazRyOVU1C0UntEPlXKrNTQK05KReFqKCapGuO1jHuoULp7dQ.0"
 
-  # No qemu-guest-agent on this build (FreeBSD), so Packer can't ask Proxmox
-  # what address it picked — unlike the two Windows builds, this one needs a
-  # fixed, knowable address instead. A locally-administered MAC (never a real
-  # vendor OUI, same reasoning as docs/conventions.md's guest MAC scheme, but
-  # this one is a build-only artifact, not a production guest — it never
-  # appears in that table) paired with a matching static reservation in the
-  # host-side runner's dnsmasq config (scripts/host-runner.sh). Both sides of
-  # this pairing have to change together if either does.
+  # No qemu-guest-agent (FreeBSD), so a fixed MAC/IP is needed; must match host-runner.sh's dnsmasq reservation.
   opnsense_build_mac = "02:00:00:00:99:10"
   opnsense_build_ip  = "10.10.99.10"
 
@@ -39,15 +29,7 @@ source "proxmox-iso" "opnsense" {
   tags                 = "lab;packer;opnsense"
 
   # -- Hardware shape --
-  # No EFI/TPM: OPNsense/FreeBSD needs neither, unlike the Windows templates.
-  # Two NICs in the same order vm-opnsense.tf's clone must declare them in —
-  # the zero-touch SPIKE's vtnet0/vtnet1 naming only holds if that order never
-  # drifts between this build and task 8's clone. Both land on the disposable
-  # build bridge here, not vmbr0/vmbr1 — the guest's own OS has no idea which
-  # physical/virtual bridge sits behind vtnet0 or vtnet1, only their PCI slot
-  # order, so build-time and production bridge assignment can differ freely
-  # (host-network SPIKE, PLAN.md). vtnet0 (WAN, first) gets a fixed MAC below
-  # since this build has no other way to be addressed for SSH.
+  # No EFI/TPM: FreeBSD needs neither. NIC order must match vm-opnsense.tf's clone (vtnet0=WAN, vtnet1=LAN).
   machine = "q35"
   bios    = "seabios"
   cores   = 2
@@ -72,12 +54,7 @@ source "proxmox-iso" "opnsense" {
   }
 
   # -- Installation media --
-  # Unlike the two Windows sources, this stays a plain iso_file reference —
-  # OPNsense ships as .iso.bz2, which iso_download_pve cannot decompress. The
-  # host-side runner downloads and decompresses opnsense_iso_url into exactly
-  # this path before `packer build` ever runs, verifying opnsense_iso_checksum
-  # itself (task 5, PLAN.md's host-network SPIKE) — Packer never touches the
-  # network for this one.
+  # iso_download_pve can't decompress OPNsense's .iso.bz2; host-runner.sh downloads and verifies it first.
   boot_iso {
     type             = "ide"
     iso_file         = "${var.iso_datastore}:iso/${var.opnsense_iso_file}"
@@ -85,11 +62,7 @@ source "proxmox-iso" "opnsense" {
     iso_storage_pool = var.iso_datastore
   }
 
-  # The config-importer's carrier. OPNsense's own docs describe this as a
-  # FAT/FAT32 USB drive specifically — whether its device scan also reads an
-  # ISO9660 volume like this one is this milestone's biggest residual unknown
-  # (PLAN.md, task 1's SPIKE). If the proof run shows it does not, this needs
-  # to become a raw FAT32 disk image attached as an extra virtual disk instead.
+  # OPNsense's config importer expects a FAT/FAT32 USB drive; unverified whether it also reads this ISO9660 volume.
   additional_iso_files {
     cd_content = {
       "conf/config.xml" = local.opnsense_config
@@ -98,57 +71,34 @@ source "proxmox-iso" "opnsense" {
     iso_storage_pool = var.iso_datastore
   }
 
-  qemu_agent = false # FreeBSD/OPNsense has no qemu-guest-agent by default — matches vm-opnsense.tf.
+  qemu_agent = false # matches vm-opnsense.tf
 
-  # Everything past "boot the installer media" here is unverified against a
-  # real install — there is no host to test it on (PLAN.md). Each step below
-  # is the documented bsdinstall/OPNsense sequence, not a guess at the
-  # sequence itself, but the exact keystroke count per screen (arrow presses,
-  # which option is highlighted by default) is the single least-verified
-  # artifact in this milestone. Confirm against the Milestone 8 proof run
-  # before trusting it unattended a second time.
+  # Documented bsdinstall/OPNsense sequence; unverified against a real install (no host to test on yet).
   boot_command = [
     "<wait60s>",
-    # "Press any key to start the configuration importer"
-    "<enter>",
+    "<enter>", # start the configuration importer
     "<wait5s>",
-    # Device name prompt — "cd1" assumes the config carrier lands on the
-    # second CD-ROM slot after the boot ISO's own "cd0". Unverified.
-    "cd1<enter>",
+    "cd1<enter>", # assumes the config carrier lands on cd1 after the boot ISO's cd0; unverified
     "<wait30s>",
-    # Live environment login: prompt. Login itself launches bsdinstall for
-    # the "installer" user (OPNsense docs) — no menu navigation needed.
-    "installer<enter>",
+    "installer<enter>", # live environment login launches bsdinstall directly
     "<wait5s>",
     "${local.opnsense_bootstrap_password}<enter>",
     "<wait10s>",
-    # Keymap selection — accept whatever bsdinstall defaults to.
-    "<enter>",
+    "<enter>", # keymap: accept default
     "<wait5s>",
-    # Filesystem type (UFS/ZFS) — accept the default rather than gamble on
-    # which one is highlighted first.
-    "<enter>",
+    "<enter>", # filesystem type: accept default
     "<wait5s>",
-    # Disk selection — a single virtual disk, toggled with space then continue.
-    "<spacebar><enter>",
+    "<spacebar><enter>", # disk selection: toggle the single virtual disk, continue
     "<wait5s>",
-    # "Last Chance!" format confirmation.
-    "<enter>",
+    "<enter>", # "Last Chance!" format confirmation
     "<wait2m>",
-    # Post-install prompt (e.g. "open a shell for final customization?") —
-    # accept the default, which should decline and proceed to reboot.
-    "<enter>",
+    "<enter>", # post-install prompt: accept default (decline shell, reboot)
     "<wait10s>",
   ]
   boot_wait = "10s"
 
   # -- Communicator --
-  # SSH, not WinRM — config.xml's <ssh><group>admins</group> block enables it
-  # for the bootstrap login. The rotation provisioner below is what actually
-  # needs it, exactly once. No guest agent (qemu_agent = false above) means
-  # Packer has no way to discover this VM's address on its own, unlike the two
-  # Windows builds — ssh_host names it explicitly instead, the fixed
-  # reservation local.opnsense_build_mac gets from the runner's dnsmasq.
+  # SSH: config.xml's <ssh><group>admins</group> enables it for the bootstrap login.
   communicator = "ssh"
   ssh_host     = local.opnsense_build_ip
   ssh_username = "root"
@@ -156,17 +106,11 @@ source "proxmox-iso" "opnsense" {
   ssh_timeout  = "45m"
 }
 
-# Its own build block, not the Windows "windows-templates" one — the two
-# guest families share nothing provisioner-side (SSH/shell here, WinRM/
-# PowerShell there), but `packer validate .` covers both with no workflow
-# change either way, since it runs over every .pkr.hcl in the directory.
 build {
   name    = "opnsense-template"
   sources = ["source.proxmox-iso.opnsense"]
 
-  # Rotates root to the real password and persists it into config.xml so a
-  # later reboot (Terraform's first clone included) can't revert it back to
-  # the bootstrap value — see the file header on rotate-opnsense-root-password.sh.
+  # Rotates root to the real password and persists it into config.xml so a later reboot can't revert it.
   provisioner "shell" {
     script = "files/rotate-opnsense-root-password.sh"
     environment_vars = [

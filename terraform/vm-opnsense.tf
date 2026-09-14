@@ -1,8 +1,5 @@
-# Clones tpl-opnsense-v1 — the config-importer bakes in interface assignment,
-# VLAN devices and addressing at build time, so this VM boots already routing
-# (PLAN.md's zero-touch decision). No provisioner: unlike the Windows guests,
-# nothing here needs a post-boot handoff — opnsense/'s Terraform root reaches
-# it over the API the moment it answers, for DHCP, NAT and firewall rules.
+# No provisioner: the template's baked-in config.xml boots this VM already routing;
+# opnsense/'s Terraform root reaches it over the API from there.
 data "proxmox_virtual_environment_vms" "opnsense_template" {
   filter {
     name   = "name"
@@ -33,9 +30,7 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
     full  = true
   }
 
-  # Matches packer/opnsense.pkr.hcl's source block exactly — see the comment in
-  # vm-dc01.tf on why this is restated rather than relied on as inheritance.
-  # No EFI/TPM: OPNsense/FreeBSD needs neither.
+  # Restated, not relied on as inheritance — see the comment in vm-dc01.tf. No EFI/TPM: FreeBSD needs neither.
   machine = "q35"
   bios    = "seabios"
 
@@ -47,8 +42,7 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
     dedicated = 4096 # docs/hardware.md's per-guest RAM split.
   }
 
-  # OPNsense (FreeBSD) has no qemu-guest-agent installed by default. Leaving
-  # this enabled would make Proxmox wait on a ping that never arrives.
+  # No qemu-guest-agent on FreeBSD; leaving this enabled would make Proxmox wait on a ping that never arrives.
   agent {
     enabled = false
   }
@@ -59,24 +53,14 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
     size         = 32 # matches the template's own disk size in packer/opnsense.pkr.hcl.
   }
 
-  # WAN uplink — untagged, lands on the existing home network per
-  # docs/network-design.md. Not part of the lab's own VLANs. MAC from
-  # docs/conventions.md; the trunk NIC below stays unpinned, same as before —
-  # nothing reserves DHCP for OPNsense, so only one documented MAC per guest
-  # is enough to satisfy the "every guest has one" convention.
+  # WAN uplink — untagged, lands on the existing home network, not the lab's own VLANs.
   network_device {
     bridge      = var.proxmox_bridge_wan
     mac_address = "02:00:00:00:00:65"
   }
 
-  # The VLAN trunk. Deliberately no vlan_id — the trunk carries VLANs 10/20/30
-  # tagged, and the template's baked-in config.xml is what creates and
-  # assigns the three VLAN devices on top of it, not opnsense/interfaces.tf
-  # any more (PLAN.md's zero-touch decision; task 8 removed those resources).
-  # The one documented exception in the terraform-proxmox skill to "every
-  # network_device gets an explicit vlan_id" — not a precedent for any other
-  # guest. Order matters: this must stay the second network_device, matching
-  # the vtnet0/vtnet1 order packer/opnsense.pkr.hcl built the template with.
+  # The VLAN trunk. No vlan_id: the template's baked-in config.xml creates and assigns the three
+  # VLAN devices on top of it. Order matters — must stay second, matching opnsense.pkr.hcl's vtnet0/vtnet1.
   network_device {
     bridge = var.proxmox_bridge_trunk
   }

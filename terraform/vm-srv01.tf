@@ -1,7 +1,5 @@
-# Mirrors vm-dc01.tf apart from name, vm_id, mac_address and role tag —
-# duplicating four lines is simpler than a module for two resources (PLAN.md
-# simplest-thing-that-works). The template lookup data source referenced below
-# lives in vm-dc01.tf, shared by both files in this root.
+# Mirrors vm-dc01.tf apart from name, vm_id, mac_address and role tag; the template
+# lookup data source referenced below lives there, shared by both files.
 resource "proxmox_virtual_environment_vm" "srv01" {
   name      = "SRV01"
   node_name = var.proxmox_node

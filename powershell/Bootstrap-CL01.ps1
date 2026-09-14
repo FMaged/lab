@@ -1,9 +1,7 @@
 #Requires -Version 5.1
 [CmdletBinding()]
-# Both arrive as plain strings - Terraform passes CLI args, no SecureString
-# (PLAN.md credential decision). LocalAdminPassword is unused here (every
-# guest's script takes the same fixed parameters, AGENTS.md); DomainAdminPassword
-# is used by the join phase below.
+# Both arrive as plain strings, not SecureString - Terraform passes them as CLI args.
+# LocalAdminPassword is unused here; every guest script takes the same fixed parameters.
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'LocalAdminPassword', Justification = 'Terraform passes this as a plain command-line argument; see the credential decision in PLAN.md.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'DomainAdminPassword', Justification = 'Terraform passes this as a plain command-line argument; see the credential decision in PLAN.md.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '', Justification = 'The domain admin password arrives as a plain command-line argument and is converted to a SecureString on first use; see the credential decision in PLAN.md.')]
@@ -30,9 +28,7 @@ function Wait-SILabDomainController {
         Blocks until a domain controller answers on LDAP.
 
     .DESCRIPTION
-        CL01 booting before DC01 finishes promoting is a normal race, not a
-        failure - this is what lets the join phase wait it out instead of
-        failing on the first attempt.
+        CL01 booting before DC01 finishes promoting is a normal race, not a failure.
 
     .PARAMETER ComputerName
         The domain controller's FQDN to test.
@@ -62,21 +58,16 @@ function Wait-SILabDomainController {
 Start-SILabTranscript -ScriptName 'Bootstrap-CL01'
 
 try {
-    # Marker is written before Add-Computer -Restart, so a failed join leaves
-    # phase 1 marked complete on an unjoined machine - this catches that.
     Assert-SILabPhaseEffect -Number 1 -Name 'DomainJoin' -Test {
         (Get-CimInstance -ClassName Win32_ComputerSystem).PartOfDomain
     }
 
     if (-not (Test-SILabPhaseComplete -Number 1)) {
-        # CL01 stays on DHCP permanently (docs/network-design.md) - no
-        # addressing phase of its own, unlike DC01/SRV01.
+        # CL01 stays on DHCP permanently - no addressing phase of its own, unlike DC01/SRV01.
         Wait-SILabDomainController
 
         $securePassword = ConvertTo-SecureString -String $DomainAdminPassword -AsPlainText -Force
-        # UPN built from the domain name defined above, not a second literal - a
-        # bare 'Administrator' can resolve to the local account instead, which
-        # fails without saying why on an unjoined machine.
+        # UPN, not a bare 'Administrator' - that can resolve to the local account instead.
         $credential = New-Object -TypeName System.Management.Automation.PSCredential `
             -ArgumentList "Administrator@$($script:ForestDomainName)", $securePassword
 
@@ -84,16 +75,11 @@ try {
         Set-SILabPhase -Number 1 -Name 'DomainJoin'
         Register-SILabResumeTask -TaskName $script:ResumeTaskName -ScriptPath $PSCommandPath
 
-        # -NewName joins and renames in one operation, landing the computer object
-        # directly in Computers/Workstations instead of the default container.
+        # -NewName joins and renames in one operation, landing the computer object in Computers/Workstations directly.
         Add-Computer -NewName 'CL01' -DomainName $script:ForestDomainName -Credential $credential `
             -OUPath $script:TargetOU -Restart -Force -Confirm:$false
-
-        # The join credential is consumed here and nowhere else on CL01 - this
-        # is CL01's only phase.
     }
     else {
-        # Resumed after the join's reboot - nothing left to do but tidy up.
         Unregister-SILabResumeTask -TaskName $script:ResumeTaskName
     }
 }

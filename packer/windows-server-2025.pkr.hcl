@@ -38,11 +38,8 @@ source "proxmox-iso" "windows_server_2025" {
   }
 
   # -- Installation media --
-  # boot_iso, not the deprecated top-level iso_file/iso_checksum. Downloaded by
-  # Proxmox itself (iso_download_pve) from win_server_iso_url — nothing crosses
-  # the operator's connection, only the host's (task 5, PLAN.md). The URL's own
-  # filename becomes the datastore filename, so it must end in exactly
-  # win_server_iso_file (docs/conventions.md) for that table to stay honest.
+  # boot_iso, not the deprecated top-level iso_file/iso_checksum. Downloaded by Proxmox itself
+  # (iso_download_pve); the URL's filename must match win_server_iso_file (docs/conventions.md).
   boot_iso {
     type             = "ide"
     iso_url          = var.win_server_iso_url
@@ -76,9 +73,8 @@ source "proxmox-iso" "windows_server_2025" {
   boot_wait    = "5s"
 
   # -- Communicator --
-  # Password matches autounattend-server.xml's bootstrap AdministratorPassword —
-  # not the real, sensitive local_admin_password. Generous timeout since a German
-  # ISO applying Windows Update is slow, with no host yet to have timed it against.
+  # Matches autounattend-server.xml's bootstrap password — not the real, sensitive local_admin_password.
+  # Generous timeout: a German ISO applying Windows Update is slow, unverified against a real host.
   communicator   = "winrm"
   winrm_username = "Administrator"
   winrm_password = "Pa$$w0rd-PackerBuild!"

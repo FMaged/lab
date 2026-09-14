@@ -139,12 +139,8 @@ resource "opnsense_firewall_filter" "clients_to_dc01_ntp" {
   }
 }
 
-# -- Provisioning: the Proxmox host to specific lab guests, and to OPNsense's
-# own API. The build now runs on the host (Milestone 10), so its own address
-# needs narrow, named access the same way any other cross-VLAN traffic does —
-# an empty default-deny ruleset does not exempt traffic bound for the firewall
-# itself (host-network SPIKE, PLAN.md). Each rule names one destination and one
-# port; never the whole Management subnet — see docs/network-design.md.
+# -- Provisioning: the Proxmox host to specific lab guests, and to OPNsense's own API --
+# Each rule names one destination and one port; never the whole Management subnet.
 
 resource "opnsense_firewall_filter" "proxmox_host_to_opnsense_api" {
   sequence    = 107

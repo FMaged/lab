@@ -1,8 +1,7 @@
 #Requires -Version 5.1
 Set-StrictMode -Version Latest
 
-# Phases run as SYSTEM after a reboot, which has no user profile - everything
-# this module writes lives under C:\ProgramData instead. See AGENTS.md.
+# SYSTEM has no user profile after a reboot, so everything lives under C:\ProgramData instead.
 $script:SILabRoot = 'C:\ProgramData\SILab'
 $script:SILabPhaseFile = Join-Path -Path $script:SILabRoot -ChildPath 'phase.json'
 $script:SILabLogDir = Join-Path -Path $script:SILabRoot -ChildPath 'Logs'
@@ -13,9 +12,8 @@ function Start-SILabTranscript {
         Starts a transcript for the current script run under C:\ProgramData\SILab\Logs.
 
     .DESCRIPTION
-        Each reboot re-invokes the entry point as a new process, so this creates one
-        transcript file per invocation rather than one per script - a stuck phase is
-        diagnosed by reading the last file, not by scrolling through every prior boot.
+        One file per invocation, not per script - each reboot re-invokes the entry point
+        as a new process.
 
     .PARAMETER ScriptName
         The calling entry point's own name (e.g. 'Bootstrap-DC01'), used in the
@@ -49,8 +47,7 @@ function Stop-SILabTranscript {
         Stops the current transcript.
 
     .DESCRIPTION
-        Safe to call even when no transcript is running - a phase that errors out
-        before Start-SILabTranscript runs must not fail a second time on cleanup.
+        Safe to call even when no transcript is running.
 
     .EXAMPLE
         Stop-SILabTranscript
@@ -74,8 +71,8 @@ function Get-SILabPhase {
         Returns the highest phase number this guest has completed.
 
     .DESCRIPTION
-        Reads the marker Set-SILabPhase writes. Returns 0 when no phase has
-        completed yet, so a caller can compare with -ge/-lt without a null check.
+        Returns 0 when no phase has completed yet, so a caller can compare with -ge/-lt
+        without a null check.
 
     .OUTPUTS
         [int]
@@ -99,11 +96,6 @@ function Test-SILabPhaseComplete {
     <#
     .SYNOPSIS
         Guard that makes re-running a completed phase a no-op.
-
-    .DESCRIPTION
-        Every entry point checks this before doing a phase's work, so a retried
-        script (after a crash, or a manual re-run) never repeats a phase that
-        already succeeded.
 
     .PARAMETER Number
         The phase number to check.
@@ -131,9 +123,8 @@ function Set-SILabPhase {
         Records that a phase has completed.
 
     .DESCRIPTION
-        Call this before an action that reboots or restarts the machine on its own
-        (Install-ADDSForest, Add-Computer -Restart) - writing it after the call
-        never runs, and the resume would repeat the phase that just rebooted.
+        Call before an action that reboots the machine on its own (Install-ADDSForest,
+        Add-Computer -Restart) - writing it after the call never runs.
 
     .PARAMETER Number
         The phase number that has completed.
@@ -167,7 +158,7 @@ function Set-SILabPhase {
             Timestamp = (Get-Date).ToString('o')
         }
         $json = $marker | ConvertTo-Json -Depth 5
-        # Set-Content defaults to ANSI in 5.1; write UTF-8 without a BOM explicitly.
+        # Set-Content defaults to ANSI in 5.1.
         $utf8NoBom = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false
         [System.IO.File]::WriteAllText($script:SILabPhaseFile, $json, $utf8NoBom)
     }
@@ -180,9 +171,7 @@ function Register-SILabResumeTask {
         startup, so a multi-phase script survives its own reboots.
 
     .DESCRIPTION
-        Runs as SYSTEM and triggers at startup rather than logon, since nobody logs
-        on to these guests between phases. -Force makes registering an
-        already-registered task a no-op replace rather than an error.
+        Triggers at startup, not logon - nobody logs on to these guests between phases.
 
     .PARAMETER TaskName
         The scheduled task's name.
@@ -219,8 +208,7 @@ function Unregister-SILabResumeTask {
         Removes the resume scheduled task once the last phase has completed.
 
     .DESCRIPTION
-        A no-op when the task does not exist, so the last phase of every entry
-        point can call this unconditionally.
+        A no-op when the task does not exist.
 
     .PARAMETER TaskName
         The scheduled task's name.
@@ -251,14 +239,9 @@ function Assert-SILabPhaseEffect {
         Fail loudly when a phase is marked complete but its effect is absent.
 
     .DESCRIPTION
-        A phase whose work ends in a reboot must write its marker *before* the
-        call, because the call never returns. The cost is that a failed phase is
-        indistinguishable from a successful one: the marker is set either way, so
-        a re-run skips the phase, tidies up and exits zero, having achieved
-        nothing.
-
-        This closes that gap for any phase whose result can be checked directly.
-        Call it before the phase guards, once per such phase.
+        A phase that reboots writes its marker before the call, so a failed reboot
+        looks identical to a successful one on re-run. This closes that gap for any
+        phase whose result can be checked directly - call before the phase guards.
 
     .PARAMETER Number
         The phase number to check.
@@ -301,10 +284,8 @@ function Assert-SILabPhaseEffect {
 
     if (-not (& $Test)) {
         throw ("Phase $Number ($Name) is marked complete but its effect is absent. " +
-            'The marker is written before the call that reboots, so a failure during ' +
-            'that call leaves exactly this state. Read the transcript under ' +
-            'C:\ProgramData\SILab\Logs to find the cause; the phase marker has to be ' +
-            'corrected by hand before re-running.')
+            'Read the transcript under C:\ProgramData\SILab\Logs to find the cause; ' +
+            'the phase marker has to be corrected by hand before re-running.')
     }
 }
 
@@ -315,18 +296,10 @@ function Start-SILabDetached {
         WinRM shell's own job object, and returns.
 
     .DESCRIPTION
-        Terraform's WinRM provisioner blocks on the command it runs and tears
-        the session down the instant that command returns - which closes this
-        shell's Windows job object and kills anything started directly inside
-        it, `Start-Process` included (PowerShell/PowerShell#16001). A one-shot
-        scheduled task escapes that job entirely, because Task Scheduler spawns
-        its own process tree outside it - the same mechanism Packer's own
-        elevated-command provisioner and Ansible's Windows modules use for
-        exactly this problem (PLAN.md's orchestration SPIKE). The task
-        definition is deleted again immediately after its process starts, so
-        whatever credential its argument list carries sits on disk for a
-        moment, never longer - the least-bad option available, not a clean
-        one; see the SPIKE for what else was considered and rejected.
+        Terraform's WinRM provisioner kills anything in its own job object, `Start-Process`
+        included, the instant its command returns (PowerShell/PowerShell#16001). A one-shot
+        scheduled task escapes that job entirely; its definition is deleted immediately after
+        the process starts, so its credential argument sits on disk only briefly.
 
     .PARAMETER ScriptPath
         Full path to the entry point script to launch (e.g. Bootstrap-DC01.ps1).
@@ -361,11 +334,7 @@ function Start-SILabDetached {
         [string]$SafeModeAdminPassword
     )
 
-    # Doubles an embedded ' the way terraform/locals.tf already does for the
-    # first layer of quoting - this is a second, independent layer (this
-    # value's new home is the scheduled task's own argument string), so it
-    # needs escaping again here rather than trusting the caller's escaping to
-    # still hold.
+    # A second, independent layer of ' escaping for the task's own argument string.
     function ConvertTo-SingleQuotedLiteral {
         param([Parameter(Mandatory)][AllowEmptyString()][string]$Value)
         return "'" + $Value.Replace("'", "''") + "'"
@@ -396,9 +365,7 @@ function Start-SILabDetached {
     try {
         Start-ScheduledTask -TaskName $taskName
 
-        # Task Scheduler dispatches asynchronously - wait for the process to
-        # actually start before deleting the definition below, or deletion
-        # can race the launch itself.
+        # Dispatch is async - wait for the process to actually start before deleting the definition.
         $deadline = (Get-Date).AddSeconds(30)
         do {
             Start-Sleep -Milliseconds 200
@@ -410,10 +377,7 @@ function Start-SILabDetached {
         }
     }
     finally {
-        # Removing the definition does not stop the instance Task Scheduler
-        # already launched - only future runs. That instance is now a child
-        # of the Task Scheduler service, not of this WinRM shell, so it
-        # outlives this command and this session either way.
+        # Removing the definition only stops future runs; the already-launched instance keeps going.
         Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
     }
 }

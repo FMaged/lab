@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
-# Renders proxmox/answer.toml from .env, then embeds it and the first-boot
-# hook into a prepared installer ISO with proxmox-auto-install-assistant.
-# Both the rendered answer file and the prepared ISO are gitignored — see the
-# zero-touch decision in PLAN.md. Needs proxmox-auto-install-assistant, which
-# this repo has no way to install or run — there is no host to prove this
-# against yet (see AGENTS.md).
+# Builds an unattended Proxmox installer ISO from answer.toml and the first-boot hook.
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then

@@ -13,9 +13,7 @@ source "proxmox-iso" "windows_11" {
   tags                 = "lab;packer;win11"
 
   # -- Hardware shape --
-  # Same shape as windows-server-2025.pkr.hcl, plus TPM 2.0 and Secure Boot,
-  # which Windows 11 enforces and Server doesn't — real hardware, not a bypass
-  # (PLAN.md Windows 11 SPIKE decision).
+  # Same shape as windows-server-2025.pkr.hcl, plus TPM 2.0 and Secure Boot, which Windows 11 enforces.
   machine = "q35"
   bios    = "ovmf"
   cores   = 4
@@ -46,9 +44,7 @@ source "proxmox-iso" "windows_11" {
   }
 
   # -- Installation media --
-  # boot_iso, not the deprecated top-level iso_file/iso_checksum. Downloaded by
-  # Proxmox itself (iso_download_pve) — see windows-server-2025.pkr.hcl's
-  # matching comment on why the URL's filename has to match docs/conventions.md.
+  # boot_iso, not the deprecated top-level iso_file/iso_checksum — see windows-server-2025.pkr.hcl.
   boot_iso {
     type             = "ide"
     iso_url          = var.win11_iso_url
@@ -77,8 +73,7 @@ source "proxmox-iso" "windows_11" {
   boot_wait    = "5s"
 
   # -- Communicator --
-  # Password matches autounattend-client.xml's bootstrap LocalAccount password
-  # exactly — not the real, sensitive local_admin_password.
+  # Matches autounattend-client.xml's bootstrap password — not the real, sensitive local_admin_password.
   communicator   = "winrm"
   winrm_username = "Administrator"
   winrm_password = "Pa$$w0rd-PackerBuild!"

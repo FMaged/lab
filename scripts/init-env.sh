@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Writes .env from example.env with every locally generatable credential filled
-# in. Refuses to touch an existing .env — see the zero-touch decision in PLAN.md.
+# Writes .env from example.env with every locally generatable credential filled in.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -12,15 +11,8 @@ if [[ -e "${env_file}" ]]; then
   exit 1
 fi
 
-# Alphanumeric only, never quotes/backslash/dollar/backtick: this project has
-# already been bitten once by an unescaped password reaching a remote-exec
-# command line (see FIXES.md). A 32-char mixed-case+digit string clears AD's
-# default 3-of-4 complexity rule without needing a symbol at all.
-#
-# pipefail is off inside these two: `tr` from /dev/urandom never reaches EOF,
-# so it always dies of SIGPIPE once `head -c` has read enough — a always-fails
-# exit status for a pipeline that otherwise worked exactly as intended, and
-# with pipefail on it would trip set -e on the very next `x="$(gen_secret)"`.
+# Alphanumeric so it survives remote-exec command lines; still meets AD complexity.
+# pipefail off: tr always dies of SIGPIPE once head has enough.
 gen_secret() {
   set +o pipefail
   LC_ALL=C tr -dc 'A-Za-z0-9' <"/dev/urandom" | head -c "${1:-32}"
@@ -39,42 +31,28 @@ set_var() {
 
 (umask 077 && cp "${example_env}" "${env_file}")
 
-# Guest passwords. local_admin_password is deliberately one value shared by
-# both tools: Packer bakes it into the templates, Terraform authenticates
-# with it.
 local_admin_password="$(gen_secret)"
 set_var "PKR_VAR_local_admin_password" "${local_admin_password}"
 set_var "TF_VAR_local_admin_password" "${local_admin_password}"
 set_var "TF_VAR_domain_admin_password" "$(gen_secret)"
 set_var "TF_VAR_dsrm_recovery_password" "$(gen_secret)"
 
-# OPNsense root password: never typed anywhere, so no hash is needed here —
-# config.xml's own root password is a fixed, non-secret bootstrap value (the
-# live installer's login prompt requires *some* password before it will even
-# start, per PLAN.md's correction). packer/opnsense.pkr.hcl rotates root to
-# this real value over SSH as its last provisioner, the same rotate-after-
-# build pattern rotate-admin-password.ps1 uses for the Windows images.
+# No hash needed: Packer rotates root to this over SSH after the build.
 set_var "PKR_VAR_opnsense_root_password" "$(gen_secret)"
 
-# OPNsense API key/secret for opnsense/'s Terraform provider. The key is
-# stored in config.xml as plaintext; only the secret is hashed there.
+# config.xml stores the API key in plaintext but only a hash of the secret.
 opnsense_api_secret="$(gen_secret)"
 set_var "OPNSENSE_API_KEY" "$(gen_secret 40)"
 set_var "OPNSENSE_API_SECRET" "${opnsense_api_secret}"
 set_var "PKR_VAR_opnsense_api_secret_hash" \
   "$(openssl passwd -6 -salt "$(gen_salt)" "${opnsense_api_secret}")"
 
-# Proxmox host root password: the plaintext is kept too, unlike OPNsense's —
-# nothing consumes it programmatically, but proxmox/answer.toml only ever
-# gets the hash, and the operator still needs to log in afterward somehow.
+# Plaintext kept for the operator's own login; answer.toml only gets the hash.
 proxmox_root_password="$(gen_secret)"
 set_var "PROXMOX_ROOT_PASSWORD" "${proxmox_root_password}"
 set_var "PROXMOX_ROOT_PASSWORD_HASH" \
   "$(openssl passwd -6 -salt "$(gen_salt)" "${proxmox_root_password}")"
 
-# Proxmox endpoint, URI and API tokens are deliberately left as placeholders:
-# the endpoint/URI depend on a host that doesn't exist yet, and the two
-# tokens are minted by the host's own first-boot hook (task 9), not by this
-# script.
+# Proxmox endpoint and API tokens stay placeholders; the host fills them in.
 
 echo "wrote ${env_file}"
