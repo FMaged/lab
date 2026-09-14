@@ -1,0 +1,25 @@
+# Rendered by scripts/prepare-proxmox-iso.sh and embedded into a prepared installer ISO. This
+# template is the only copy that reaches git — it holds a password hash, not the plaintext.
+#
+# Schema: https://pve.proxmox.com/wiki/Automated_Installation
+
+[global]
+keyboard             = "de"
+country              = "de"
+fqdn                 = "pve.silab.internal"
+mailto               = "admin@silab.internal"
+timezone             = "Europe/Berlin"
+root-password-hashed = "${PROXMOX_ROOT_PASSWORD_HASH}"
+
+[network]
+# The provider's own uplink, not a lab address — OPNsense doesn't exist yet at install time.
+# The host's own 10.10.10.2 on VLAN 10 is added afterward, once host-runner.sh creates vmbr1.
+source = "from-dhcp"
+
+[disk-setup]
+filesystem = "ext4"
+disk-list = ["sda"] # placeholder — the real rented server's boot-disk device name is unconfirmed.
+
+[first-boot]
+source   = "from-iso"
+ordering = "fully-up"

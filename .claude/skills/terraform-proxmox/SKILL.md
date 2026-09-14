@@ -34,12 +34,14 @@ secret is marked `sensitive = true`. Resource and variable naming and VM tags fo
   place; `powershell/` takes it from there.
 - **The topology is fixed:** DC01, SRV01, CL01 and the firewall. Adding a VM is a
   change to `PLAN.md` first.
-- **The OPNsense VM lives here too**, and it is the exception to most rules on this
-  page. It boots an ISO instead of cloning a template, since it has no Packer image,
-  and it is bootstrapped by hand afterwards — see the bootstrap decision in `PLAN.md`.
-- **This root is applied in two stages.** The firewall VM comes up and is bootstrapped
-  before the Windows guests are worth starting: until it routes there is no gateway, no
-  DHCP and no DNS path. A single blind `apply` of everything is not the intended use.
+- **The OPNsense VM lives here too**, cloned from `tpl-opnsense-v1` (`packer/opnsense.pkr.hcl`)
+  the same as the three Windows guests — see the zero-touch decision in `PLAN.md`, which
+  superseded the earlier manual/ISO-boot arrangement. Its one remaining exception to the
+  rules on this page: the trunk `network_device` carries VLANs 10/20/30 tagged, so it sets
+  no `vlan_id` of its own.
+- **This root is applied in two stages.** The firewall VM comes up before the Windows
+  guests are worth starting: until it routes there is no gateway, no DHCP and no DNS
+  path. A single blind `apply` of everything is not the intended use.
 
 - **This configuration cannot be applied.** There is no Proxmox host, so `plan` and
   `apply` are unavailable during development, possibly ever. `terraform validate` with

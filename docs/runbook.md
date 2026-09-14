@@ -6,8 +6,50 @@ doing it, not written speculatively ahead of the work.
 
 ## 1. Proxmox host install
 
-*(Milestone 8 — not started. Will cover: ISO install, network/VLAN bridge setup
-matching `docs/hardware.md`, and confirming the host is reachable at 10.10.10.2.)*
+**Never executed.** Every step below is what `proxmox/answer.toml` and
+`proxmox/first-boot-hook.sh` are written to do, and the last of it is the
+first stage `scripts/host-runner.sh` runs — there is no host to run any of it
+against yet. See the execution status decision in PLAN.md.
+
+1. On your own machine: `cp example.env .env`, then `scripts/init-env.sh` to
+   generate every locally generatable credential, including
+   `PROXMOX_ROOT_PASSWORD`/`_HASH`.
+2. Download the Proxmox VE installer ISO. `set -a; . ./.env; set +a`, then
+   `scripts/prepare-proxmox-iso.sh <source.iso> <output.iso>` renders
+   `proxmox/answer.toml` from `.env` and calls `proxmox-auto-install-assistant
+   prepare-iso` to embed the rendered answer file and
+   `proxmox/first-boot-hook.sh` into `<output.iso>`. Both the rendered answer
+   file and any prepared ISO are gitignored — never commit either.
+3. Get `<output.iso>` onto the rented server and boot it (Milestone 8 task 1
+   confirms the exact delivery mechanism once a specific product is chosen).
+4. The install runs unattended per `proxmox/answer.toml` — German keyboard and
+   timezone, `source = "from-dhcp"` for whatever address the provider's own
+   uplink hands out, since no VLAN exists yet to put a static one on (the
+   host-network SPIKE, PLAN.md) — and reboots on its own when done.
+5. On first real boot, `proxmox/first-boot-hook.sh` runs exactly once
+   (Proxmox's own `proxmox-first-boot` package guarantees this) and mints one
+   API token each for Terraform and Packer, per the secrets decision in
+   PLAN.md, writing both to `/root/proxmox-api-tokens.txt`. Nobody copies
+   these out by hand any more — `scripts/host-runner.sh` merges them into
+   `.env` itself and deletes the file, as its own first real stage.
+6. Set the host firewall rule restricting the web UI to your own address
+   **before** relying on anything past this point (Milestone 8 task 12) — this
+   section only gets the host installed and reachable over SSH, not secured
+   against the open internet.
+
+From here, `scripts/deploy.sh <host-address>` (run from your own machine) does
+everything else in this runbook — sections 2 through 5 below describe what it
+does and what to check if a stage stalls, not commands to type by hand.
+
+**If it stops:** a hang before the first reboot usually means
+`proxmox/answer.toml`'s `disk-list = ["sda"]` doesn't match the real server's
+boot disk — a residual unknown flagged in that file; confirm the actual device
+name with the provider first. A reboot with nothing in
+`/root/proxmox-api-tokens.txt` means the first-boot hook failed; check
+`journalctl -u proxmox-first-boot` for why. Unlike OPNsense's build (section
+2), the SPIKE behind this section found nothing in the Proxmox install that
+needed a manual fallback — a genuine stall here is a bug to fix in
+`proxmox/answer.toml` or the hook script, not a step to do by hand.
 
 ## 2. Packer image build
 
@@ -16,41 +58,50 @@ locally and in CI) but has never run against a real Proxmox host — there is no
 host yet. See the execution status decision in PLAN.md; this note comes out the
 moment a real build runs.
 
-1. Upload the two installation ISOs and the VirtIO driver ISO to the Proxmox
-   `local` datastore (or whatever `iso_datastore` is set to), named exactly as
-   `docs/conventions.md` specifies — `win-server-2025-de.iso`,
-   `win-11-pro-de.iso`, `virtio-win-<version>.iso`.
-2. Set up credentials once for the whole project: `cp example.env .env`, fill in
-   the real values, then `set -a; . ./.env; set +a`. That covers the Proxmox URL
-   and token and `local_admin_password` for this section. Separately, copy
-   `packer/example.pkrvars.hcl` to `packer/packer.auto.pkrvars.hcl` (gitignored)
-   and set the node, datastores and the three ISO checksums — those are not
-   secrets and do not belong in `.env`. Never commit either filled-in file.
-3. From `packer/`: `packer init .` (downloads the pinned Proxmox and
-   Windows-Update plugins), then `packer build .`. Both sources build from one
-   `packer build .` invocation, since they share the `windows-templates` build
-   block — there is no way to build just one without commenting out the other's
-   `source` entry in `build.pkr.hcl`.
-4. Watch for the build reaching the WinRM communicator — this is the point the
-   packer-windows skill calls "finished" for the unattended-install half. If it
-   hangs before then, the most likely causes, in order: the VirtIO driver isn't
-   at the drive letter the answer file expects (see the multi-letter hedge in
-   both `autounattend-*.xml`), the image-index name doesn't match the real ISO
-   (`docs/conventions.md`'s residual unknown, flagged since the Windows 11 SPIKE),
-   or the bootstrap password in the answer file and the source block's
-   `winrm_password` have drifted out of sync.
-5. On success, confirm both templates exist in the Proxmox UI: `tpl-winsrv2025-de-v1`
-   and `tpl-win11-de-v1`, VM IDs 9000 and 9001, tagged `lab` plus their role tag.
-   Also confirm the QEMU guest agent is installed inside each template, not just
-   that the build succeeded. Every guest sets `agent { enabled = true }`, so a
-   template without the agent does not fail the next apply — it makes Terraform
-   wait for a ping that never arrives until the step times out.
-   `install-guest-tools.ps1` now fails the build on a non-zero installer exit
-   code, so this check should be a formality; confirm it anyway, once.
-6. Re-running `packer build .` after a change always produces a *new* numbered
-   template (`-v2`, `-v3`, …) per `docs/conventions.md` — it never overwrites
-   `-v1` in place. `terraform/` clones by template *name*, so bumping the version
-   is a Terraform change too — the old template stays until nothing references it.
+`scripts/host-runner.sh` runs this section as two of its own stages, both
+skipped automatically if their result already exists:
+
+1. **Trust `pve-root-ca`, install Terraform and Packer, build `vmbr1`/`vmbr2`,
+   merge the tokens.** Terraform 1.16.1 and Packer 1.16.0 are downloaded and
+   checked against HashiCorp's own signed `SHA256SUMS`, never a package
+   repository. `vmbr1` (the VLAN 10/20/30 trunk) and `vmbr2` (a disposable
+   network for the build VMs, since OPNsense doesn't exist yet to route
+   anything — the host-network SPIKE, PLAN.md) are created here, with
+   `dnsmasq` serving `vmbr2`.
+2. **Download every ISO on the host, then build.** The two Windows images and
+   the VirtIO driver ISO are downloaded by Proxmox itself
+   (`iso_download_pve`) straight from the URLs in
+   `packer/packer.auto.pkrvars.hcl` (copy `packer/example.pkrvars.hcl` there
+   first and fill in the node, datastores and four ISO URLs/checksums — not
+   secrets, so this file travels with `scripts/deploy.sh`, never through
+   `.env`). OPNsense ships as `.iso.bz2`, which Packer cannot decompress, so
+   the runner downloads and decompresses that one itself before calling
+   `packer build .`. Any template whose VMID already exists is skipped, via
+   `packer build -only=...` — a re-run after a partial failure never rebuilds
+   what already succeeded.
+
+**If it stalls:** watch which communicator a build is waiting on — WinRM for
+the two Windows sources (the point the packer-windows skill calls
+"finished"), SSH for OPNsense. If a Windows build hangs first, the most
+likely causes, in order: the VirtIO driver isn't at the drive letter the
+answer file expects (see the multi-letter hedge in both `autounattend-*.xml`),
+the image-index name doesn't match the real ISO (`docs/conventions.md`'s
+residual unknown, flagged since the Windows 11 SPIKE), or the bootstrap
+password in the answer file and the source block's `winrm_password` have
+drifted out of sync. If the OPNsense build hangs, see
+`packer/opnsense.pkr.hcl`'s own comments first — its `boot_command` is the
+single least-verified artifact in the whole project (PLAN.md's zero-touch
+SPIKE), and the config-carrier device name (guessed as `cd1`) is the most
+likely wrong guess.
+
+On success, all three templates exist in the Proxmox UI:
+`tpl-winsrv2025-de-v1` (9000), `tpl-win11-de-v1` (9001) and `tpl-opnsense-v1`
+(9002), each tagged `lab` plus its role tag. A Windows template without the
+QEMU guest agent does not fail this step — it makes the *next* one wait on a
+ping that never arrives. Re-running `packer build .` after a change always
+produces a *new* numbered template (`-v2`, `-v3`, …) per
+`docs/conventions.md` — it never overwrites `-v1` in place; `terraform/`
+clones by template *name*, so bumping the version is a Terraform change too.
 
 ## 3. OPNsense setup
 
@@ -58,93 +109,43 @@ moment a real build runs.
 validated where a validator exists; none of it has run against a real firewall.
 See the execution status decision in PLAN.md.
 
-### 3a. Manual bootstrap
+### 3a. The template's baked-in configuration
 
-The manual/code boundary is interface assignment and addressing, not VLANs — see
-the decision in PLAN.md. Concretely, that means this half happens in two passes:
-some of it before `terraform apply` creates the VLAN devices, the rest after.
+There is no manual bootstrap any more — the zero-touch decision in PLAN.md
+superseded it. Interface assignment, VLAN devices and addressing are all
+already in `tpl-opnsense-v1` by the time section 2's build finishes, set by
+`packer/files/config.xml` via the live-image config importer, not typed by a
+person after the VM exists. If a setting here turns out wrong, the fix is
+that file (and a new template version), never a click in the web UI.
 
-Every credential in this project lives in one gitignored `.env` at the repository
-root. Copy the committed template once, fill it in, and load it before any tool:
+Nothing to do in this section by hand. If it needs checking:
 
-```
-cp example.env .env
-# edit .env
-set -a; . ./.env; set +a
-```
+- The interface assignment (WAN on `vtnet0`, the three VLANs on `vtnet1` as
+  `opt1`/`opt2`/`opt3`) and every address are `packer/files/config.xml`'s job —
+  compare them against `docs/network-design.md` there, not on a live system.
+- The root password is generated by `scripts/init-env.sh` and rotated into the
+  template by `packer/opnsense.pkr.hcl`'s last provisioner, never typed
+  anywhere at runbook time.
+- The API key and secret `opnsense/`'s Terraform provider authenticates with
+  are generated the same way, baked into the template the same build, and
+  already sit in `.env` as `OPNSENSE_API_KEY`/`OPNSENSE_API_SECRET`.
 
-`example.env` documents each variable and what it is for. Four matter before this
-section's step 1: `PROXMOX_VE_ENDPOINT` and `PROXMOX_VE_API_TOKEN`, both from
-section 1's host install, and the Packer equivalents section 2 already used.
+### 3b. Clone the firewall, then apply DHCP, firewall and NAT
 
-The three `OPNSENSE_*` values cannot be filled in yet — they do not exist until
-step 5 below creates them. Leave them as placeholders, complete steps 1 to 5, then
-fill them in and reload `.env` before 3b. That ordering is the bootstrapping
-problem this section exists to solve.
+`scripts/host-runner.sh`'s next stage does this: `terraform apply
+-target=proxmox_virtual_environment_vm.opnsense` first (not optional — this
+root defines all four guests, and a plain `apply` would start the three
+Windows machines before the network they need exists), then `terraform init
+&& terraform apply` in `opnsense/` — creating the Clients DHCP scope, the
+Servers reservations, the aliases, every filter rule (including the four
+narrow rules letting the Proxmox host itself reach each guest's WinRM and
+OPNsense's own API — task 6, PLAN.md) and the outbound NAT rule. Both applies
+are skipped if the firewall guest already exists.
 
-**Before `terraform apply` for `terraform/vm-opnsense.tf`:**
-
-1. Attach the OPNsense installation ISO to the `local` datastore first, as
-   `local:iso/opnsense.iso` — the VM won't boot without it. Then, from
-   `terraform/`, create **only the firewall**:
-
-   ```
-   terraform apply -target=proxmox_virtual_environment_vm.opnsense
-   ```
-
-   The `-target` is not optional. This root defines all four guests, and a plain
-   `apply` here would build the three Windows machines too — before the network
-   they need exists, so each would boot with no address and Terraform's WinRM
-   handoff would hang waiting on an address nothing is serving yet.
-
-**After the VM exists, before any Terraform touches `opnsense/`:**
-
-2. Boot the VM and run the OPNsense installer from console (ZFS is fine for a
-   lab; set a root password you'll actually remember, since it's what the web
-   UI login uses too).
-3. At the console menu, **Assign interfaces** (option 1): assign the WAN-bridge
-   NIC as `wan` and note the trunk-bridge NIC's device name (e.g. `vtnet1`) —
-   it stays unassigned for now. It is the VLAN devices Terraform creates from it
-   in 3b that get assigned, not the raw NIC itself.
-4. Confirm WAN picked up a DHCP lease from the home router (console menu or
-   Interfaces > WAN in the web UI) — no action needed if it did.
-5. In the web UI: **System > Settings > Administration**, enable the API.
-   **System > Access > Users**, create (or use an existing account) an API
-   key/secret pair. This is the literal bootstrapping problem the decision in
-   PLAN.md describes — nothing in `opnsense/` can run before this exists.
-
-**After 3b has run once and `opnsense/`'s VLAN devices exist:**
-
-6. **Interfaces > Assignments**: assign each of the three new VLAN devices
-   (`vtnet1.10`, `vtnet1.20`, `vtnet1.30`, or whatever the tag suffix renders
-   as) to its own logical interface, and give each the static address from
-   `docs/network-design.md`'s address table — `10.10.10.1/24`, `10.10.20.1/24`,
-   `10.10.30.1/24`. Naming the assigned interfaces `MGMT`/`SERVERS`/`CLIENTS`
-   (rather than the default `OPT1`/`OPT2`/`OPT3`) makes every later step, and
-   every firewall rule, far easier to read.
-
-### 3b. Code — VLANs, DHCP, firewall
-
-Two roots, and they apply in a fixed order — `opnsense/` cannot run before 3a's
-manual steps give it an API to talk to, and its own VLAN devices don't exist
-for step 6 of 3a to assign until this runs once.
-
-1. The targeted `terraform apply` in `terraform/` is already done — see 3a step 1.
-   The other three guests in that root stay uncreated until section 4; they have
-   nothing to boot into until this section finishes.
-2. Complete 3a steps 2–5 (install, WAN assignment, enable the API).
-3. `terraform init && terraform apply` in `opnsense/` — creates the three VLAN
-   devices, the Clients DHCP scope, the aliases, every filter rule and the
-   outbound NAT rule.
-4. Complete 3a step 6 (assign each VLAN device to an interface, address it).
-5. Verify: from a host on each VLAN, confirm it can reach its gateway and (for
-   Clients) that it received a DHCP lease with DC01 as its DNS server. There is
-   no DC01 yet at this point, so the DNS server it hands out is an address that
-   does not answer — that is expected here and fixed by section 4.
-
-Re-running `terraform apply` in `opnsense/` after a change is safe and expected
-— unlike the Packer templates, this root's resources are meant to be updated in
-place, not replaced.
+**If it stalls:** verify from a host on each VLAN that it can reach its
+gateway and, for Clients, that it received a DHCP lease with DC01 as its DNS
+server — there is no DC01 yet at this point, so that address not answering is
+expected here, not a fault, and gets fixed by section 4.
 
 **CI:** the Terraform job in `.github/workflows/validate.yml` already matrixes
 over both `terraform/` and `opnsense/` (added in Milestone 2, before either root
@@ -156,105 +157,94 @@ branch and watching that leg go red before reverting.
 ## 4. DC01 — domain controller
 
 **Never executed.** Depends on section 3 being fully done first — no gateway, no
-DHCP reservation and no DNS path exist until the firewall is bootstrapped and
-its VLAN devices are assigned and addressed. Also depends on three guest
-passwords, all already in the `.env` loaded back in section 3a:
+DHCP reservation and no DNS path exist until the firewall is cloned and its
+`opnsense/` apply has run. Also depends on three guest passwords, all already
+in `.env`:
 
 | Variable | Value |
 | --- | --- |
 | `TF_VAR_local_admin_password` | must equal `PKR_VAR_local_admin_password` — Packer baked it into both templates and Terraform's WinRM connection authenticates with it |
-| `TF_VAR_domain_admin_password` | domain administrator password: SRV01 and CL01's join, and reused as DC01's own local Administrator password just before promotion (see step 3) |
+| `TF_VAR_domain_admin_password` | domain administrator password: SRV01 and CL01's join, and reused as DC01's own local Administrator password just before promotion (see below) |
 | `TF_VAR_dsrm_recovery_password` | Directory Services Restore Mode password, for DC01's `Install-ADDSForest` call only |
 
-None has a default, because every one is a credential. Terraform passes all three
-as command-line arguments to each guest's Bootstrap script — DC01 gets all three,
-SRV01 and CL01 the first two.
+None has a default, because every one is a credential.
 
-1. `terraform apply` in `terraform/`, targeted at just DC01 first
-   (`-target=proxmox_virtual_environment_vm.dc01`) rather than all four guests
-   at once — DC01 has to exist and be reachable before SRV01/CL01's own applies
-   would mean anything, since they join a domain DC01 hasn't created yet.
-2. Proxmox clones the template, boots DC01, and it picks up its DHCP
-   reservation (`10.10.20.10` — `opnsense/dhcp.tf`). Terraform's WinRM
-   connection waits on exactly that address; if the reservation is missing or
-   the MAC doesn't match `docs/conventions.md`, this is where it hangs.
-   Two other hangs look identical here and are worth ruling out in order: the
-   guest agent missing from the template (section 2 step 5), and the clone's
-   disk disagreeing with the template's — `terraform/` declares 80 GB for the
-   servers and 64 GB for the client to match the two Packer builds, and a clone
-   can grow a disk but never shrink one.
-3. Terraform uploads `powershell/` and runs `Bootstrap-DC01.ps1` once. From
-   here the guest drives itself across two reboots without Terraform's
-   involvement — see the reboot decision in `PLAN.md`:
-   - **Addressing** — renames the guest to `DC01`, replaces its DHCP address
-     with the static `10.10.20.10`, and points DNS at OPNsense (`10.10.20.1`)
-     since DC01 is not authoritative for itself yet. No reboot of its own —
-     falls straight through into the next phase, so the recovery password
-     never has to survive one (see the credential-ordering decision in
-     PLAN.md).
-   - **Promotion** — installs AD DS, resets the local Administrator's
-     password to `domain_admin_password` (so it carries over into becoming
-     the domain Administrator's password), then calls `Install-ADDSForest`
-     for `ad.silab.internal` / `SILAB` at the 2025 functional level. This
-     call reboots the guest on its own — **the first of DC01's two reboots**.
-     A scheduled task (`SILab-Resume-DC01`, `AtStartup`, `SYSTEM`) resumes
-     `Bootstrap-DC01.ps1` automatically after it.
-   - **Site rename, OU tree and groups, baseline GPOs** — all three run in
-     the same resumed invocation, since none of them need a credential or a
-     reboot: renames the default site to `SILAB-Lab`, points DC01's DNS at
-     itself, creates the `SILAB` OU tree and the two groups from
-     `docs/ad-design.md`, then the three baseline GPOs. The scheduled task is
-     unregistered at the very end — there is nothing left to resume to.
-4. Confirm the transcript for each invocation under
-   `C:\ProgramData\SILab\Logs\Bootstrap-DC01-<timestamp>.log` on DC01, and the
-   current phase in `C:\ProgramData\SILab\phase.json`. A guest sitting
-   unreachable is expected between step 3's promotion phase and its reboot
-   completing — check `Get-ScheduledTask -TaskName 'SILab-Resume-DC01'` exists
-   if it looks stuck rather than assuming a hang.
-5. Confirm DC01 now answers on `10.10.20.10` *statically* — the DHCP
-   reservation was only ever how it got there the first time — and that
-   `docs/ad-design.md`'s forest, OU tree and GPOs are all present. Section 5's
-   closing step runs the actual health check for both this section and the
-   next.
+`scripts/host-runner.sh`'s next stage: `terraform apply
+-target=proxmox_virtual_environment_vm.dc01` (skipped if DC01 already
+exists) clones the template, boots DC01 onto its DHCP reservation
+(`10.10.20.10` — `opnsense/dhcp.tf`), uploads `powershell/`, and launches
+`Bootstrap-DC01.ps1` **detached** via `Start-SILabDetached` — the provisioner
+returns almost at once rather than waiting on a script that reboots twice
+(the orchestration SPIKE, PLAN.md). From here the guest drives itself across
+both reboots with no further Terraform involvement:
+
+- **Addressing** — renames the guest to `DC01`, replaces its DHCP address
+  with the static `10.10.20.10`, and points DNS at OPNsense (`10.10.20.1`)
+  since DC01 is not authoritative for itself yet. No reboot of its own.
+- **Promotion** — installs AD DS, resets the local Administrator's password
+  to `domain_admin_password` (carrying it over as the domain Administrator's
+  password), then calls `Install-ADDSForest` for `ad.silab.internal` /
+  `SILAB` at the 2025 functional level — **the first of DC01's two reboots**.
+  `SILab-Resume-DC01` (`AtStartup`, `SYSTEM`, no credential in its own
+  definition) resumes automatically after it.
+- **Site rename, OU tree and groups, baseline GPOs** — all run in the same
+  resumed invocation, no credential or reboot needed for any of them, ending
+  by unregistering the resume task.
+
+The runner then polls DC01's own `C:\ProgramData\SILab\phase.json` (via
+`terraform/wait-for-guests.tf`'s `wait_dc01` resource, repeatedly
+`-replace`d) until it reports phase 5 — the same file the resume mechanism
+already relies on, not a new signal.
+
+**If it stalls:** confirm the transcript for each invocation under
+`C:\ProgramData\SILab\Logs\Bootstrap-DC01-<timestamp>.log` on DC01, and the
+current phase in `phase.json` directly, rather than guessing from
+reachability alone — a guest mid-reboot looks identical to a hung one. Check
+`Get-ScheduledTask -TaskName 'SILab-Resume-DC01'` exists if it looks stuck.
+Two hangs before any of this look identical to a missing DHCP reservation:
+the guest agent missing from the template (section 2), and the clone's disk
+disagreeing with the template's (`terraform/` declares 80 GB to match the
+Packer build; a clone can grow a disk but never shrink one).
 
 ## 5. SRV01 and CL01 — join the domain
 
 **Never executed.** Depends on section 4 being complete — a domain that
 doesn't exist yet has nothing to join.
 
-1. `terraform apply` in `terraform/` again, this time for the remaining two
-   guests (or the whole root — DC01's apply is now a no-op). Both can go in
-   the same apply; neither depends on the other, only on DC01.
-2. Each picks up its own DHCP reservation (`10.10.20.11` for SRV01,
-   `10.10.30.50` for CL01) and Terraform runs its own Bootstrap script once:
-   - **SRV01** (`Bootstrap-SRV01.ps1`) — an addressing phase first (static
-     `10.10.20.11`, DNS pointed at DC01), no reboot, falling straight through
-     into the join phase in the same invocation. The join
-     (`Add-Computer -NewName 'SRV01' ... -OUPath 'Computers/Servers'`) waits
-     for DC01 to answer on LDAP first — booting before DC01 finishes
-     promoting is a normal race, not a failure — then consumes
-     `domain_admin_password` and reboots on its own. A scheduled task
-     (`SILab-Resume-SRV01`) resumes and unregisters itself once the join has
-     completed.
-   - **CL01** (`Bootstrap-CL01.ps1`) — no addressing phase at all, since CL01
-     stays on DHCP permanently. Waits for DC01 the same way, then joins
-     directly with `-NewName 'CL01' -OUPath 'Computers/Workstations'`,
-     reboots, and its own scheduled task (`SILab-Resume-CL01`) unregisters
-     itself afterward.
-3. Confirm both show up as domain-joined computer objects in the OUs
-   `docs/ad-design.md` specifies (`Computers/Servers` for SRV01,
-   `Computers/Workstations` for CL01), and that CL01's logon screen shows the
-   Workstation Baseline GPO's banner — the one visible proof point the whole
-   lab has been building toward since Milestone 1. As with DC01, a transcript
-   for each invocation lives under `C:\ProgramData\SILab\Logs` on the guest
-   in question, and a phase stuck between the join call and its reboot
-   completing looks unreachable rather than hung.
-4. Close both sections by copying `powershell/Test-SILab.ps1` to DC01 (or any
-   domain member with RSAT) and running it: `.\Test-SILab.ps1`. It is
-   read-only, prints one `[PASS]`/`[FAIL]` line per row of
-   `docs/ad-design.md` and `docs/network-design.md`, and exits non-zero if
-   anything is missing — the actual verification step for every claim in
-   sections 4 and 5, not just a suggestion to look around by hand.
+`scripts/host-runner.sh`'s last two stages: `terraform apply` for the
+remaining two guests (skipped for whichever already exists), then the same
+detached-launch-and-poll pattern as DC01, against `wait_srv01`
+(phase 2) and `wait_cl01` (phase 1):
+
+- **SRV01** (`Bootstrap-SRV01.ps1`) — an addressing phase first (static
+  `10.10.20.11`, DNS pointed at DC01), no reboot, falling straight through
+  into the join phase. The join (`Add-Computer -NewName 'SRV01' ...
+  -OUPath 'Computers/Servers'`) waits for DC01 to answer on LDAP first —
+  booting before DC01 finishes promoting is a normal race, not a failure —
+  then consumes `domain_admin_password` and reboots on its own.
+  `SILab-Resume-SRV01` resumes and unregisters itself once the join
+  completes.
+- **CL01** (`Bootstrap-CL01.ps1`) — no addressing phase at all, since CL01
+  stays on DHCP permanently. Waits for DC01 the same way, joins directly with
+  `-NewName 'CL01' -OUPath 'Computers/Workstations'`, reboots, and
+  `SILab-Resume-CL01` unregisters itself afterward.
+
+Once both report their terminal phase, the runner's last stage runs
+`Test-SILab.ps1` on DC01 (`terraform_data.run_health_check`) — read-only,
+prints one `[PASS]`/`[FAIL]` line per row of `docs/ad-design.md` and
+`docs/network-design.md`, and its own exit code becomes `scripts/deploy.sh`'s
+exit code. A pass scrubs every secret from the host automatically
+(`scripts/scrub-host.sh`); a fail keeps everything in place for a re-run and
+prints the exact command to scrub by hand before releasing the server anyway
+— see Milestone 8 task 13.
+
+**If it stalls:** confirm both show up as domain-joined computer objects in
+the OUs `docs/ad-design.md` specifies, and that CL01's logon screen shows the
+Workstation Baseline GPO's banner — the one visible proof point the whole lab
+has been building toward since Milestone 1. A transcript for each invocation
+lives under `C:\ProgramData\SILab\Logs` on the guest in question; a phase
+stuck between the join call and its reboot completing looks unreachable
+rather than hung, the same as DC01.
 
 ## 6. Full rebuild, start to finish
 

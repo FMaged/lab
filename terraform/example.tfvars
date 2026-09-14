@@ -4,7 +4,6 @@
 # .env. See example.env and the secrets decision in PLAN.md.
 
 proxmox_node    = "pve"
-iso_datastore   = "local"
 guest_datastore = "local-lvm"
 
 network_vlan_management = 10

@@ -13,9 +13,7 @@ source "proxmox-iso" "windows_11" {
   tags                 = "lab;packer;win11"
 
   # -- Hardware shape --
-  # Same shape as windows-server-2025.pkr.hcl, plus TPM 2.0 and Secure Boot,
-  # which Windows 11 enforces and Server doesn't — real hardware, not a bypass
-  # (PLAN.md Windows 11 SPIKE decision).
+  # Same shape as windows-server-2025.pkr.hcl, plus TPM 2.0 and Secure Boot, which Windows 11 enforces.
   machine = "q35"
   bios    = "ovmf"
   cores   = 4
@@ -42,16 +40,17 @@ source "proxmox-iso" "windows_11" {
 
   network_adapters {
     model  = "virtio"
-    bridge = "vmbr0"
+    bridge = var.proxmox_bridge_build # disposable build network, not WAN — see the host-network SPIKE in PLAN.md.
   }
 
   # -- Installation media --
-  # boot_iso, not the deprecated top-level iso_file/iso_checksum.
+  # boot_iso, not the deprecated top-level iso_file/iso_checksum — see windows-server-2025.pkr.hcl.
   boot_iso {
     type             = "ide"
-    iso_file         = "${var.iso_datastore}:iso/${var.win11_iso_file}"
+    iso_url          = var.win11_iso_url
     iso_checksum     = var.win11_iso_checksum
     iso_storage_pool = var.iso_datastore
+    iso_download_pve = true
   }
 
   additional_iso_files {
@@ -60,10 +59,12 @@ source "proxmox-iso" "windows_11" {
     iso_storage_pool = var.iso_datastore
   }
   additional_iso_files {
-    type         = "scsi"
-    iso_file     = "${var.iso_datastore}:iso/${var.virtio_iso_file}"
-    iso_checksum = var.virtio_iso_checksum
-    unmount      = true
+    type             = "scsi"
+    iso_url          = var.virtio_iso_url
+    iso_checksum     = var.virtio_iso_checksum
+    iso_storage_pool = var.iso_datastore
+    iso_download_pve = true
+    unmount          = true
   }
 
   qemu_agent = true
@@ -72,8 +73,7 @@ source "proxmox-iso" "windows_11" {
   boot_wait    = "5s"
 
   # -- Communicator --
-  # Password matches autounattend-client.xml's bootstrap LocalAccount password
-  # exactly — not the real, sensitive local_admin_password.
+  # Matches autounattend-client.xml's bootstrap password — not the real, sensitive local_admin_password.
   communicator   = "winrm"
   winrm_username = "Administrator"
   winrm_password = "Pa$$w0rd-PackerBuild!"

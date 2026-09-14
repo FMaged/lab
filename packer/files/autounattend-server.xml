@@ -201,21 +201,33 @@
           <PlainText>true</PlainText>
         </Password>
       </AutoLogon>
-      <!-- Enables WinRM so Packer's communicator can take over. Nothing else runs
-           from here — provisioners own everything past this point. -->
+      <!-- Order 1 installs the QEMU guest agent before WinRM exists at all —
+           `qemu_agent = true` in the source block is how Packer learns this VM's
+           address, but the agent only ships inside virtio-win-guest-tools, so
+           without this the builder waits out its whole timeout with nothing to
+           query. install-guest-tools.ps1 (the shared provisioner chain) still
+           runs afterward too, idempotently, as a second, PowerShell-driven
+           attempt — this inline copy is the minimum that can run before a
+           provisioner exists to be uploaded. Orders 2-4 enable WinRM so Packer's
+           communicator can take over; nothing else runs from here. -->
       <FirstLogonCommands>
         <SynchronousCommand wcm:action="add">
           <Order>1</Order>
+          <Description>Install QEMU guest agent (VirtIO guest tools) before WinRM</Description>
+          <CommandLine>powershell -NoProfile -ExecutionPolicy Bypass -Command "$exe = Get-Volume | Where-Object { $_.DriveType -eq 'CD-ROM' -and $_.DriveLetter } | ForEach-Object { $_.DriveLetter + ':\virtio-win-guest-tools.exe' } | Where-Object { Test-Path $_ } | Select-Object -First 1; if ($exe) { Start-Process -FilePath $exe -ArgumentList '/install','/quiet','/norestart' -Wait -NoNewWindow }"</CommandLine>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add">
+          <Order>2</Order>
           <Description>Enable WinRM</Description>
           <CommandLine>winrm quickconfig -quiet</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
-          <Order>2</Order>
+          <Order>3</Order>
           <Description>Allow WinRM basic auth and unencrypted traffic for the build only</Description>
           <CommandLine>powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true; Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true"</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
-          <Order>3</Order>
+          <Order>4</Order>
           <Description>Open the WinRM HTTP port</Description>
           <CommandLine>netsh advfirewall firewall add rule name="WinRM-HTTP" dir=in action=allow protocol=TCP localport=5985</CommandLine>
         </SynchronousCommand>

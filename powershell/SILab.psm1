@@ -1,8 +1,7 @@
 #Requires -Version 5.1
 Set-StrictMode -Version Latest
 
-# Phases run as SYSTEM after a reboot, which has no user profile - everything
-# this module writes lives under C:\ProgramData instead. See AGENTS.md.
+# SYSTEM has no user profile after a reboot, so everything lives under C:\ProgramData instead.
 $script:SILabRoot = 'C:\ProgramData\SILab'
 $script:SILabPhaseFile = Join-Path -Path $script:SILabRoot -ChildPath 'phase.json'
 $script:SILabLogDir = Join-Path -Path $script:SILabRoot -ChildPath 'Logs'
@@ -13,9 +12,8 @@ function Start-SILabTranscript {
         Starts a transcript for the current script run under C:\ProgramData\SILab\Logs.
 
     .DESCRIPTION
-        Each reboot re-invokes the entry point as a new process, so this creates one
-        transcript file per invocation rather than one per script - a stuck phase is
-        diagnosed by reading the last file, not by scrolling through every prior boot.
+        One file per invocation, not per script - each reboot re-invokes the entry point
+        as a new process.
 
     .PARAMETER ScriptName
         The calling entry point's own name (e.g. 'Bootstrap-DC01'), used in the
@@ -49,8 +47,7 @@ function Stop-SILabTranscript {
         Stops the current transcript.
 
     .DESCRIPTION
-        Safe to call even when no transcript is running - a phase that errors out
-        before Start-SILabTranscript runs must not fail a second time on cleanup.
+        Safe to call even when no transcript is running.
 
     .EXAMPLE
         Stop-SILabTranscript
@@ -74,8 +71,8 @@ function Get-SILabPhase {
         Returns the highest phase number this guest has completed.
 
     .DESCRIPTION
-        Reads the marker Set-SILabPhase writes. Returns 0 when no phase has
-        completed yet, so a caller can compare with -ge/-lt without a null check.
+        Returns 0 when no phase has completed yet, so a caller can compare with -ge/-lt
+        without a null check.
 
     .OUTPUTS
         [int]
@@ -99,11 +96,6 @@ function Test-SILabPhaseComplete {
     <#
     .SYNOPSIS
         Guard that makes re-running a completed phase a no-op.
-
-    .DESCRIPTION
-        Every entry point checks this before doing a phase's work, so a retried
-        script (after a crash, or a manual re-run) never repeats a phase that
-        already succeeded.
 
     .PARAMETER Number
         The phase number to check.
@@ -131,9 +123,8 @@ function Set-SILabPhase {
         Records that a phase has completed.
 
     .DESCRIPTION
-        Call this before an action that reboots or restarts the machine on its own
-        (Install-ADDSForest, Add-Computer -Restart) - writing it after the call
-        never runs, and the resume would repeat the phase that just rebooted.
+        Call before an action that reboots the machine on its own (Install-ADDSForest,
+        Add-Computer -Restart) - writing it after the call never runs.
 
     .PARAMETER Number
         The phase number that has completed.
@@ -167,7 +158,7 @@ function Set-SILabPhase {
             Timestamp = (Get-Date).ToString('o')
         }
         $json = $marker | ConvertTo-Json -Depth 5
-        # Set-Content defaults to ANSI in 5.1; write UTF-8 without a BOM explicitly.
+        # Set-Content defaults to ANSI in 5.1.
         $utf8NoBom = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false
         [System.IO.File]::WriteAllText($script:SILabPhaseFile, $json, $utf8NoBom)
     }
@@ -180,9 +171,7 @@ function Register-SILabResumeTask {
         startup, so a multi-phase script survives its own reboots.
 
     .DESCRIPTION
-        Runs as SYSTEM and triggers at startup rather than logon, since nobody logs
-        on to these guests between phases. -Force makes registering an
-        already-registered task a no-op replace rather than an error.
+        Triggers at startup, not logon - nobody logs on to these guests between phases.
 
     .PARAMETER TaskName
         The scheduled task's name.
@@ -219,8 +208,7 @@ function Unregister-SILabResumeTask {
         Removes the resume scheduled task once the last phase has completed.
 
     .DESCRIPTION
-        A no-op when the task does not exist, so the last phase of every entry
-        point can call this unconditionally.
+        A no-op when the task does not exist.
 
     .PARAMETER TaskName
         The scheduled task's name.
@@ -251,14 +239,9 @@ function Assert-SILabPhaseEffect {
         Fail loudly when a phase is marked complete but its effect is absent.
 
     .DESCRIPTION
-        A phase whose work ends in a reboot must write its marker *before* the
-        call, because the call never returns. The cost is that a failed phase is
-        indistinguishable from a successful one: the marker is set either way, so
-        a re-run skips the phase, tidies up and exits zero, having achieved
-        nothing.
-
-        This closes that gap for any phase whose result can be checked directly.
-        Call it before the phase guards, once per such phase.
+        A phase that reboots writes its marker before the call, so a failed reboot
+        looks identical to a successful one on re-run. This closes that gap for any
+        phase whose result can be checked directly - call before the phase guards.
 
     .PARAMETER Number
         The phase number to check.
@@ -301,10 +284,101 @@ function Assert-SILabPhaseEffect {
 
     if (-not (& $Test)) {
         throw ("Phase $Number ($Name) is marked complete but its effect is absent. " +
-            'The marker is written before the call that reboots, so a failure during ' +
-            'that call leaves exactly this state. Read the transcript under ' +
-            'C:\ProgramData\SILab\Logs to find the cause; the phase marker has to be ' +
-            'corrected by hand before re-running.')
+            'Read the transcript under C:\ProgramData\SILab\Logs to find the cause; ' +
+            'the phase marker has to be corrected by hand before re-running.')
+    }
+}
+
+function Start-SILabDetached {
+    <#
+    .SYNOPSIS
+        Launches a Bootstrap entry point as a detached process, outside the
+        WinRM shell's own job object, and returns.
+
+    .DESCRIPTION
+        Terraform's WinRM provisioner kills anything in its own job object, `Start-Process`
+        included, the instant its command returns (PowerShell/PowerShell#16001). A one-shot
+        scheduled task escapes that job entirely; its definition is deleted immediately after
+        the process starts, so its credential argument sits on disk only briefly.
+
+    .PARAMETER ScriptPath
+        Full path to the entry point script to launch (e.g. Bootstrap-DC01.ps1).
+
+    .PARAMETER LocalAdminPassword
+        Forwarded to the entry point as -LocalAdminPassword, only if bound.
+
+    .PARAMETER DomainAdminPassword
+        Forwarded to the entry point as -DomainAdminPassword, only if bound.
+
+    .PARAMETER SafeModeAdminPassword
+        Forwarded to the entry point as -SafeModeAdminPassword, only if bound -
+        DC01 only; SRV01 and CL01's entry points have no such parameter, and
+        passing it to them would fail to bind rather than being ignored.
+
+    .EXAMPLE
+        Start-SILabDetached -ScriptPath 'C:\lab-provisioning\Bootstrap-DC01.ps1' -DomainAdminPassword 'x'
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'LocalAdminPassword', Justification = 'Received as a plain command-line argument from Terraform; see the credential decision in PLAN.md.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'DomainAdminPassword', Justification = 'Received as a plain command-line argument from Terraform; see the credential decision in PLAN.md.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'SafeModeAdminPassword', Justification = 'Received as a plain command-line argument from Terraform; see the credential decision in PLAN.md.')]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ScriptPath,
+
+        [string]$LocalAdminPassword,
+
+        [string]$DomainAdminPassword,
+
+        [string]$SafeModeAdminPassword
+    )
+
+    # A second, independent layer of ' escaping for the task's own argument string.
+    function ConvertTo-SingleQuotedLiteral {
+        param([Parameter(Mandatory)][AllowEmptyString()][string]$Value)
+        return "'" + $Value.Replace("'", "''") + "'"
+    }
+
+    $argumentParts = @('-ExecutionPolicy', 'Bypass', '-File', (ConvertTo-SingleQuotedLiteral $ScriptPath))
+    if ($PSBoundParameters.ContainsKey('LocalAdminPassword')) {
+        $argumentParts += '-LocalAdminPassword', (ConvertTo-SingleQuotedLiteral $LocalAdminPassword)
+    }
+    if ($PSBoundParameters.ContainsKey('DomainAdminPassword')) {
+        $argumentParts += '-DomainAdminPassword', (ConvertTo-SingleQuotedLiteral $DomainAdminPassword)
+    }
+    if ($PSBoundParameters.ContainsKey('SafeModeAdminPassword')) {
+        $argumentParts += '-SafeModeAdminPassword', (ConvertTo-SingleQuotedLiteral $SafeModeAdminPassword)
+    }
+    $taskArgument = $argumentParts -join ' '
+    $taskName = 'SILab-Launch-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
+
+    if (-not $PSCmdlet.ShouldProcess($ScriptPath, 'Launch detached via a one-shot scheduled task')) {
+        return
+    }
+
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $taskArgument
+    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date)
+    $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
+
+    try {
+        Start-ScheduledTask -TaskName $taskName
+
+        # Dispatch is async - wait for the process to actually start before deleting the definition.
+        $deadline = (Get-Date).AddSeconds(30)
+        do {
+            Start-Sleep -Milliseconds 200
+            $state = (Get-ScheduledTask -TaskName $taskName).State
+        } while ($state -ne 'Running' -and (Get-Date) -lt $deadline)
+
+        if ($state -ne 'Running') {
+            throw "Scheduled task '$taskName' did not start within 30 seconds."
+        }
+    }
+    finally {
+        # Removing the definition only stops future runs; the already-launched instance keeps going.
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
     }
 }
 
@@ -316,5 +390,6 @@ Export-ModuleMember -Function @(
     'Assert-SILabPhaseEffect',
     'Set-SILabPhase',
     'Register-SILabResumeTask',
-    'Unregister-SILabResumeTask'
+    'Unregister-SILabResumeTask',
+    'Start-SILabDetached'
 )

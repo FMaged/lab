@@ -20,7 +20,7 @@ module and a read-only health check:
 | `Bootstrap-DC01.ps1` | Domain controller: rename, address, promote the forest, OUs, groups, GPOs |
 | `Bootstrap-SRV01.ps1` | Member server: rename, address, join into `Computers/Servers` |
 | `Bootstrap-CL01.ps1` | Client: rename, address, join into `Computers/Workstations` |
-| `SILab.psm1` | Logging, phase markers, scheduled-task register/unregister, idempotency guards |
+| `SILab.psm1` | Logging, phase markers, scheduled-task register/unregister, idempotency guards, the detached-launch helper |
 | `Test-SILab.ps1` | Read-only verification of the whole domain against the design docs |
 | `PSScriptAnalyzerSettings.psd1` | The rule set CI enforces |
 
@@ -46,6 +46,14 @@ means changing Terraform that is already merged.
   promotion, the scheduled task runs as SYSTEM on a domain controller and already holds the
   directory rights to create OUs, groups and policies. A phase that needs a credential after
   a reboot is a design error — reorder it rather than adding a credential store.
+- **Terraform launches an entry point detached and never waits on it (Milestone 10).**
+  `remote-exec` calls `Start-SILabDetached` (`SILab.psm1`), which starts the real entry
+  point via a one-shot scheduled task and deletes the task's own definition again as
+  soon as its process is running — escaping the WinRM shell's job object, which would
+  otherwise kill anything started directly the instant the shell closes (see the
+  Gotchas section). The completion signal a host-side orchestrator polls for is
+  `Set-SILabPhase`'s own `C:\ProgramData\SILab\phase.json`, already written by every
+  phase for the resume mechanism — nothing new to maintain for that half.
 - **Passwords arrive as plain strings, not `SecureString`.** Terraform passes command-line
   arguments, so the parameter cannot be a `SecureString`. Convert on the first line that
   touches it, and let it reach no log line, no transcript and no error message.
@@ -82,5 +90,18 @@ difference. The command CI runs is in `AGENTS.md`.
 
 ## Gotchas
 
-<!-- Empty until the scripts exist (Milestone 6). Anything that costs more than an hour to
-work out goes here, not in a commit message nobody rereads. -->
+- **A WinRM shell's Windows job object kills anything started directly inside it, the
+  instant the shell closes** — including a plain `Start-Process`, confirmed by a real,
+  open `PowerShell/PowerShell` issue reporting exactly this. Terraform's `remote-exec`
+  closes the shell right after the command it ran returns, which is precisely what
+  "launch detached and return at once" needs to happen — so the detached child dies at
+  the worst possible moment, the moment it looks like it worked. A one-shot scheduled
+  task is the actual fix, not a nicety: Task Scheduler spawns its own process tree
+  outside the WinRM job entirely, which is also why Packer's own elevated-command
+  provisioner and Ansible's Windows modules both reach for the same mechanism.
+  `Start-SILabDetached` (`SILab.psm1`) deletes the task definition again immediately
+  after confirming its process started, so the price is a few hundred milliseconds of
+  a credential sitting in a task file on disk — a real, narrow exception to "no
+  credential ever written to the guest's disk," not a clean solution. See PLAN.md's
+  orchestration SPIKE for what else was tried and rejected first (`Start-Process`
+  and `on_failure = "continue"` alone both leave a real gap).

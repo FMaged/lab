@@ -1,9 +1,3 @@
-variable "trunk_parent_interface" {
-  type        = string
-  description = "The trunk NIC's OPNsense device name (e.g. vtnet1) that VLAN devices attach to — noted during the manual bootstrap, runbook section 3a step 3"
-  default     = "vtnet1"
-}
-
 variable "network_vlan_management" {
   type        = number
   description = "VLAN ID for the Management network — see docs/network-design.md"
@@ -22,23 +16,22 @@ variable "network_vlan_clients" {
   default     = 30
 }
 
-# OPNsense's own key per assigned interface, not the VLAN ID — unconfirmed until
-# runbook 3a step 6 actually assigns them; "opt1/opt2/opt3" is a guess, not verified.
+# OPNsense's own key per assigned interface, not the VLAN ID — fixed by packer/files/config.xml.
 
 variable "opnsense_interface_management" {
   type        = string
-  description = "OPNsense's assigned-interface key for the Management VLAN — unconfirmed, see above"
+  description = "OPNsense's assigned-interface key for the Management VLAN — see packer/files/config.xml"
   default     = "opt1"
 }
 
 variable "opnsense_interface_servers" {
   type        = string
-  description = "OPNsense's assigned-interface key for the Servers VLAN — unconfirmed, see above"
+  description = "OPNsense's assigned-interface key for the Servers VLAN — see packer/files/config.xml"
   default     = "opt2"
 }
 
 variable "opnsense_interface_clients" {
   type        = string
-  description = "OPNsense's assigned-interface key for the Clients VLAN — unconfirmed, see above"
+  description = "OPNsense's assigned-interface key for the Clients VLAN — see packer/files/config.xml"
   default     = "opt3"
 }

@@ -1,20 +1,13 @@
 title = "gitleaks config for the SI lab"
 
-# Extends gitleaks' own default ruleset rather than replacing it — every built-in
-# rule (AWS keys, generic API keys, etc.) still applies. This file only adds one
-# narrow exception.
+# Extends gitleaks' own default ruleset rather than replacing it.
 [extend]
 useDefault = true
 
 [allowlist]
 description = "Packer's build-time bootstrap Administrator password — not a secret"
 regexes = [
-  # Set by packer/files/autounattend-server.xml and autounattend-client.xml, and
-  # matched by the winrm_password in packer/windows-server-2025.pkr.hcl and
-  # packer/windows-11.pkr.hcl. It exists only to let Packer's WinRM communicator
-  # connect during a build; the real local admin password (the sensitive
-  # local_admin_password variable) is rotated in as the very last provisioner step
-  # and never appears in any committed file. See the no-secrets-in-git decision in
-  # PLAN.md and the file headers on both answer files.
+  # Only lets Packer's WinRM communicator connect during a build; the real local_admin_password
+  # is rotated in as the last provisioner step and never appears in any committed file.
   '''Pa\$\$w0rd-PackerBuild!''',
 ]

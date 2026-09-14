@@ -79,6 +79,17 @@ jobs:
             exit 1
           }
 
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: shellcheck scripts/ and the Proxmox first-boot hook
+        # shellcheck ships preinstalled on ubuntu-latest — no action or install
+        # step needed. proxmox/*.sh isn't under scripts/, but it's still real
+        # shell code with nothing else checking it, so it's in scope too.
+        run: shellcheck scripts/*.sh proxmox/*.sh
+
   consistency:
     name: design consistency
     runs-on: ubuntu-latest

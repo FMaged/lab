@@ -34,16 +34,18 @@ source "proxmox-iso" "windows_server_2025" {
 
   network_adapters {
     model  = "virtio"
-    bridge = "vmbr0" # trunk bridge — see docs/hardware.md for the two viable NIC layouts.
+    bridge = var.proxmox_bridge_build # disposable build network, not WAN — see the host-network SPIKE in PLAN.md.
   }
 
   # -- Installation media --
-  # boot_iso, not the deprecated top-level iso_file/iso_checksum.
+  # boot_iso, not the deprecated top-level iso_file/iso_checksum. Downloaded by Proxmox itself
+  # (iso_download_pve); the URL's filename must match win_server_iso_file (docs/conventions.md).
   boot_iso {
     type             = "ide"
-    iso_file         = "${var.iso_datastore}:iso/${var.win_server_iso_file}"
+    iso_url          = var.win_server_iso_url
     iso_checksum     = var.win_server_iso_checksum
     iso_storage_pool = var.iso_datastore
+    iso_download_pve = true
   }
 
   # Two separate CD-ROMs: the answer file generated on the fly, and the VirtIO
@@ -55,10 +57,12 @@ source "proxmox-iso" "windows_server_2025" {
     iso_storage_pool = var.iso_datastore
   }
   additional_iso_files {
-    type         = "scsi"
-    iso_file     = "${var.iso_datastore}:iso/${var.virtio_iso_file}"
-    iso_checksum = var.virtio_iso_checksum
-    unmount      = true
+    type             = "scsi"
+    iso_url          = var.virtio_iso_url
+    iso_checksum     = var.virtio_iso_checksum
+    iso_storage_pool = var.iso_datastore
+    iso_download_pve = true
+    unmount          = true
   }
 
   qemu_agent = true
@@ -69,9 +73,8 @@ source "proxmox-iso" "windows_server_2025" {
   boot_wait    = "5s"
 
   # -- Communicator --
-  # Password matches autounattend-server.xml's bootstrap AdministratorPassword —
-  # not the real, sensitive local_admin_password. Generous timeout since a German
-  # ISO applying Windows Update is slow, with no host yet to have timed it against.
+  # Matches autounattend-server.xml's bootstrap password — not the real, sensitive local_admin_password.
+  # Generous timeout: a German ISO applying Windows Update is slow, unverified against a real host.
   communicator   = "winrm"
   winrm_username = "Administrator"
   winrm_password = "Pa$$w0rd-PackerBuild!"

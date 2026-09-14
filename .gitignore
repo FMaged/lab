@@ -22,6 +22,12 @@ packer-manifest.json
 !example.env
 .env.*
 
+# Proxmox host self-install (zero-touch) — the rendered answer file carries a
+# real password hash, and a prepared ISO embeds the rendered file whole.
+# Neither is ever committed (PLAN.md's zero-touch decision).
+proxmox/answer.rendered.toml
+proxmox/*.iso
+
 # OS / editor
 .DS_Store
 

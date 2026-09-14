@@ -16,6 +16,27 @@ resource "opnsense_firewall_alias" "dc01" {
   description = "DC01 — see docs/network-design.md"
 }
 
+resource "opnsense_firewall_alias" "srv01" {
+  name        = "srv01"
+  type        = "host"
+  content     = ["10.10.20.11"] # SRV01's static address — see docs/network-design.md.
+  description = "SRV01 — see docs/network-design.md"
+}
+
+resource "opnsense_firewall_alias" "cl01" {
+  name        = "cl01"
+  type        = "host"
+  content     = ["10.10.30.50"] # CL01's DHCP reservation — see docs/network-design.md.
+  description = "CL01 — see docs/network-design.md"
+}
+
+resource "opnsense_firewall_alias" "proxmox_host" {
+  name        = "proxmox_host"
+  type        = "host"
+  content     = ["10.10.10.2"] # The Proxmox host's own address — see docs/network-design.md.
+  description = "Proxmox host — source of the build's own provisioning traffic, see docs/network-design.md"
+}
+
 resource "opnsense_firewall_alias" "lab_networks" {
   name        = "lab_networks"
   type        = "network"
@@ -115,6 +136,61 @@ resource "opnsense_firewall_filter" "clients_to_dc01_ntp" {
     protocol    = "UDP"
     source      = { net = local.clients_subnet }
     destination = { net = opnsense_firewall_alias.dc01.name, port = "123" }
+  }
+}
+
+# -- Provisioning: the Proxmox host to specific lab guests, and to OPNsense's own API --
+# Each rule names one destination and one port; never the whole Management subnet.
+
+resource "opnsense_firewall_filter" "proxmox_host_to_opnsense_api" {
+  sequence    = 107
+  description = "Proxmox host to OPNsense's own API — opnsense/'s Terraform provider"
+  interface   = { interface = [var.opnsense_interface_management] }
+  filter = {
+    action      = "pass"
+    direction   = "in"
+    protocol    = "TCP"
+    source      = { net = opnsense_firewall_alias.proxmox_host.name }
+    destination = { net = "10.10.10.1", port = "443" } # OPNsense's own Management-interface address.
+  }
+}
+
+resource "opnsense_firewall_filter" "proxmox_host_to_dc01_winrm" {
+  sequence    = 108
+  description = "Proxmox host to DC01 — WinRM (Terraform's provisioner, the runner's poll and health check)"
+  interface   = { interface = [var.opnsense_interface_management] }
+  filter = {
+    action      = "pass"
+    direction   = "in"
+    protocol    = "TCP"
+    source      = { net = opnsense_firewall_alias.proxmox_host.name }
+    destination = { net = opnsense_firewall_alias.dc01.name, port = "5985" }
+  }
+}
+
+resource "opnsense_firewall_filter" "proxmox_host_to_srv01_winrm" {
+  sequence    = 109
+  description = "Proxmox host to SRV01 — WinRM, same reason as DC01"
+  interface   = { interface = [var.opnsense_interface_management] }
+  filter = {
+    action      = "pass"
+    direction   = "in"
+    protocol    = "TCP"
+    source      = { net = opnsense_firewall_alias.proxmox_host.name }
+    destination = { net = opnsense_firewall_alias.srv01.name, port = "5985" }
+  }
+}
+
+resource "opnsense_firewall_filter" "proxmox_host_to_cl01_winrm" {
+  sequence    = 110
+  description = "Proxmox host to CL01 — WinRM, same reason as DC01"
+  interface   = { interface = [var.opnsense_interface_management] }
+  filter = {
+    action      = "pass"
+    direction   = "in"
+    protocol    = "TCP"
+    source      = { net = opnsense_firewall_alias.proxmox_host.name }
+    destination = { net = opnsense_firewall_alias.cl01.name, port = "5985" }
   }
 }
 

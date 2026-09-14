@@ -78,6 +78,12 @@ status decision below.
 | 30 | [The repository stays in English throughout](#the-repository-stays-in-english-throughout) |
 | 31 | [The reader-facing surface is a narrative walkthrough plus an explicit limitations section](#the-reader-facing-surface-is-a-narrative-walkthrough-plus-an-explicit-limitations-section) |
 | 32 | [Every credential lives in one gitignored .env at the repository root](#every-credential-lives-in-one-gitignored-env-at-the-repository-root) |
+| 33 | [OPNsense ships as a Packer template, configured via its own live-image importer](#opnsense-ships-as-a-packer-template-configured-via-its-own-live-image-importer) |
+| 34 | [The Proxmox host installs itself from an answer file; its tokens travel to the operator over SSH](#the-proxmox-host-installs-itself-from-an-answer-file-its-tokens-travel-to-the-operator-over-ssh) |
+| 35 | [Zero-touch deployment supersedes the manual OPNsense bootstrap and hardens the manual/code boundary finding](#zero-touch-deployment-supersedes-the-manual-opnsense-bootstrap-and-hardens-the-manualcode-boundary-finding) |
+| 36 | [SPIKE: the host's network exists in stages — provider DHCP, then a build network, then VLAN 10](#spike-the-hosts-network-exists-in-stages--provider-dhcp-then-a-build-network-then-vlan-10) |
+| 37 | [SPIKE: Terraform starts each Bootstrap script and lets go; a bash poll loop on the host watches phase.json](#spike-terraform-starts-each-bootstrap-script-and-lets-go-a-bash-poll-loop-on-the-host-watches-phasejson) |
+| 38 | [The Packer/Terraform build runs on the Proxmox host itself; deploy.sh is a thin SSH wrapper around it](#the-packerterraform-build-runs-on-the-proxmox-host-itself-deploysh-is-a-thin-ssh-wrapper-around-it) |
 
 ### Topology is domain controller, member server, client and firewall
 
@@ -233,6 +239,16 @@ as Scaleway or Hetzner can take a Proxmox install, run the whole build once, be
 captured as evidence, and be destroyed the same weekend.
 Note: this is a capstone, not a dependency. Every milestone before it stands on its
 own, and the repo is a complete portfolio piece if it never happens.
+Note, corrected by Milestone 9's second SPIKE (2026-09-12): Hetzner and Scaleway were
+named here as interchangeable hourly examples without checking either provider's actual
+billing terms. Hetzner's real dedicated-hardware line (Server Auction/Robot) bills
+monthly, not hourly — only its virtualized Cloud product is hourly, which is exactly the
+kind of instance this decision's own "ordinary cloud VMs" rejection below rules out.
+Scaleway's Elastic Metal is genuinely hourly, genuinely bare metal, and lists Proxmox VE
+as a catalog image. See
+[The Proxmox host installs itself from an answer file; its tokens travel to the operator
+over SSH](#the-proxmox-host-installs-itself-from-an-answer-file-its-tokens-travel-to-the-operator-over-ssh).
+Milestone 8 task 1 still owns the final provider and product choice.
 Rejected: buying a host now — the largest cost in the project for a benefit that
 rented metal delivers for a few euros.
 Rejected: nesting Proxmox on the existing homelab host — not available at the moment.
@@ -331,6 +347,15 @@ mechanism this project rejected on its merits, and it would be unverifiable unti
 proof run.
 Rejected: calling the whole firewall manual — it would leave the layer with the most
 interesting content, the rule set, outside the repo.
+Replaced by: [Zero-touch deployment supersedes the manual OPNsense bootstrap and hardens
+the manual/code boundary finding](#zero-touch-deployment-supersedes-the-manual-opnsense-bootstrap-and-hardens-the-manualcode-boundary-finding).
+The rejection of a seeded config.xml above was right about the mechanism this project
+had rejected on its merits at the time — a file dropped at first boot, unversioned and
+outside git. It was wrong to assume that was the only shape a seeded config could take.
+A config template that lives in the repository, is rendered from `docs/network-design.md`
+and `.env` at build time, and is baked into a Packer template the same way every other
+image in this project is, is not that mechanism — it is the same discipline this project
+already applies to the two Windows answer files.
 
 ### The OPNsense VM is defined in terraform/ with every other VM
 
@@ -401,6 +426,16 @@ assignment+address step before DHCP or firewall rules on it mean anything. State
 order explicitly in the runbook, not just the split.
 Rejected: waiting for a future provider version that might add interface assignment —
 pins the milestone to an upstream release with no date freely chosen by this project.
+Amended by [Zero-touch deployment supersedes the manual OPNsense bootstrap and hardens
+the manual/code boundary finding](#zero-touch-deployment-supersedes-the-manual-opnsense-bootstrap-and-hardens-the-manualcode-boundary-finding):
+the finding above still holds exactly as checked — no resource in the pinned provider
+assigns an interface or sets its address, and none has appeared since. Only the
+consequence changes. What used to mean a person doing that one step by hand after every
+`terraform apply` now means a Packer template that boots with the assignment already
+made, because the same live-image importer that solves the OPNsense bootstrap (see the
+replacement above) sets interface assignment and addressing too, before the installed
+system's own first boot ever reaches the point of asking. The `opnsense/` root still
+owns everything the API actually reaches — DHCP, firewall, NAT, aliases — unchanged.
 Rejected: treating the whole `opnsense/` root as not worth it since it can't reach 100%
 automation — the DHCP and firewall layer is real, substantial code either way.
 
@@ -543,3 +578,453 @@ anyone.
 Rejected: one `.env` per layer — a smaller blast radius per file, but the Proxmox
 endpoint and the local administrator password are shared between layers and would have
 to be written twice, which is how two copies drift apart.
+
+### OPNsense ships as a Packer template, configured via its own live-image importer
+
+Why: researched live (2026-09-12) because the manual/code boundary decision below found
+no API to assign or address an interface — but that is a fact about the *running* REST
+API, not about the installer, and the installer turns out to have a real, documented
+route around it. OPNsense's live image looks for a second FAT/FAT32-formatted volume
+carrying an unencrypted `/conf/config.xml`; at "Press any key to start the configuration
+importer" it loads that file — interfaces assigned, VLAN devices created, the API
+enabled, a user's key already present — before the installer ever touches the target
+disk, so the installed system inherits it whole. This is OPNsense's own mechanism for
+scripted and appliance deployment, not a workaround improvised for this project, and its
+own issue tracker describes it in exactly those terms.
+The remaining install steps — keymap, filesystem choice, disk selection, the "Last
+Chance!" format confirmation, swap, root password, reboot — are a linear `bsdinstall`
+dialog sequence with no branching once the target disk is fixed to one device, the same
+shape of keystroke automation `boot_command` already drives for both Windows answer
+files, just against TUI dialogs instead of an XML file.
+API keys live in `config.xml` as a plaintext `<key>` and a SHA-512-crypt (`$6$...`)
+`<secret>` — the identical hash format `passwd` itself uses — so both the real secret and
+its hash can be generated offline in `scripts/init-env.sh`, with only the hash ever
+reaching a committed template.
+Confirmed: `additional_iso_files`/`boot_command` already drive this exact shape of
+installer automation twice, in `windows-server-2025.pkr.hcl` and `windows-11.pkr.hcl`;
+the config-importer feature is real, current, and documented for unencrypted files; the
+API secret's hash format is real, cross-checked against a live `config.xml` example, not
+assumed from the passwd-hashing precedent alone.
+Residual unknown, left for task 7 and the Milestone 8 proof run: OPNsense's own docs
+describe the importer reading a FAT/FAT32 *USB* drive specifically, while Packer's
+`additional_iso_files` produces an ISO9660 disc — whether the importer's device scan
+also picks up an ISO9660 volume, or needs a small raw FAT32 disk image attached as an
+extra virtual disk instead, is unconfirmed until there is a live image to test against.
+Changes task 7's implementation only, not this decision. FreeBSD's `vtnet` interface
+naming is PCI-slot order, confirmed stable — but only as long as Terraform's clone
+declares the same two `network_device` blocks in the same order the template was built
+with; that is a real constraint task 8 has to hold, not a risk to design around.
+How: `packer/opnsense.pkr.hcl` drives the installer with `boot_command`;
+`packer/files/config.xml` (task 6) carries the interface/VLAN/API configuration with
+placeholders substituted from `PKR_VAR_*` at build time.
+Correction, found while writing task 5 (2026-09-12): no rotate-after-build provisioner is
+needed for the root password after all. OPNsense's own documentation confirms the
+importer route makes `bsdinstall`'s own password prompt take its value from the imported
+configuration — the installed system's root password already is whatever
+`config.xml`'s `<passwd>` hash says, not a bootstrap value to change later.
+Second correction, found while writing task 7 (2026-09-12) — the first correction above
+was itself incomplete. OPNsense's install docs, read in full rather than summarized,
+state plainly: once the importer runs, the live environment's own login prompt (the
+`installer` user, which is what actually launches `bsdinstall`) requires *that same*
+imported root password to log in *before* the installer ever starts — there is no
+password-free path to it. That makes the Windows pattern the right one after all, for a
+different reason than first assumed: `config.xml`'s `<passwd>` hash is a fixed,
+non-secret bootstrap value (computed once, the same way the Windows answer files use a
+fixed bootstrap string), typed by `boot_command` to clear that login gate; a `shell`
+provisioner over SSH then rotates root's password to the real secret after install, the
+same rotate-after-build pattern `rotate-admin-password.ps1` already uses. The API user's
+`<secret>` hash is unaffected by any of this — it is never typed anywhere, only ever
+read by the API, so it carries the real secret's hash from the start, generated offline
+in `scripts/init-env.sh` exactly as originally planned.
+Rejected: reproducing the configuration by sending keystrokes into OPNsense's post-install
+console setup wizard (the LAN/WAN/OPT interface-name prompts) instead of the importer —
+that wizard only assigns interfaces to physical/`vtnet` devices, has no path to create
+VLAN devices or enable the API, and would still need a second automation mechanism for
+everything it cannot reach.
+Rejected: configuring OPNsense entirely after boot over SSH with a provisioner script —
+works, but reimplements `config.xml` editing as ad hoc shell commands against a schema
+this project already has full Terraform-resource coverage for (Milestone 4). The importer
+route reuses `opnsense/`'s existing resources for everything the API can reach and only
+needs a template for what only the installer can set.
+### The Proxmox host installs itself from an answer file; its tokens travel to the operator over SSH
+
+Amended by: [The Packer/Terraform build runs on the Proxmox host itself; deploy.sh is a thin SSH wrapper around it](#the-packerterraform-build-runs-on-the-proxmox-host-itself-deploysh-is-a-thin-ssh-wrapper-around-it).
+The installer finding below stands untouched; the orchestration-location and
+token-delivery finding it reaches at the end is superseded — WinRM cannot hop
+through a jump host, so the build itself, not just its tokens, has to live on
+the host.
+
+Why: researched live (2026-09-12). `proxmox-auto-install-assistant prepare-iso` is real
+and current, in the box since Proxmox VE 8.2: it embeds a TOML `answer.toml` — root
+password, network configuration, target disk — plus an optional first-boot script into an
+otherwise-stock installer ISO. The first-boot hook can be ordered `fully-up`, running only
+once networking is live, which is exactly the point at which it can safely mint Proxmox
+API tokens.
+Rented bare metal, not the host installer, turned out to be the harder half of this
+spike. Checked Hetzner and Scaleway — the two named in the proof-run decision — against
+their actual billing pages rather than trusting the decision's own wording. Hetzner's
+real bare-metal line (Server Auction/Robot) bills monthly with no hourly option; only
+Hetzner Cloud is hourly, and Cloud instances are virtualized, which is exactly what this
+project needs bare metal to avoid. Scaleway's Elastic Metal bills either hourly or
+monthly with no commitment fee on the hourly plan, is genuine dedicated hardware, and its
+Beryllium range lists Proxmox VE as a selectable catalog image outright. Scaleway
+satisfies every constraint Milestone 8 task 1 has to check; Hetzner, as named, does not.
+This corrects the proof-run decision's framing of the two as interchangeable, rather than
+narrowing it — final product, rate and boot mechanism are still Milestone 8 task 1's job,
+but it now starts from Scaleway rather than a coin flip.
+Where orchestration runs was the other open question: an operator's own workstation
+driving `scripts/deploy.sh` (Milestone 10), or the hypervisor's first-boot hook chaining
+straight into Terraform and Packer itself. Chose the operator route. The hook's only job
+is minting the two tokens this project already splits by tool (one for Terraform, one for
+Packer, so either can be revoked alone) and writing them to a root-only-readable file;
+whatever runs `deploy.sh` retrieves them over the same SSH connection the Milestone 8
+task 4 host firewall rule already allow-lists to one address, and takes it from there.
+Rejected: the hypervisor's own first-boot hook running the whole build — removes the wait
+for a human or a runner to fetch the tokens, but it means the orchestration logic lives
+and executes somewhere with no git history of its own, on a machine this project
+otherwise treats as a minimal appliance rather than a place to install general-purpose
+tooling.
+Rejected: the installer's own post-installation webhook feature as the token-delivery
+route — it is real, but built for install-status reporting, not for carrying secrets, and
+using it here would mean standing up a receiver just for a one-time run.
+Note: the billing check above corrects [The proof run is rented hourly bare metal, not
+purchased hardware](#the-proof-run-is-rented-hourly-bare-metal-not-purchased-hardware),
+which named Hetzner and Scaleway as interchangeable without checking either provider's
+actual terms — see the note added there.
+
+### Zero-touch deployment supersedes the manual OPNsense bootstrap and hardens the manual/code boundary finding
+
+Why: Milestones 9 and 10 exist to remove every step Milestone 8's runbook currently asks
+a person to do by hand before a proof run runs up a bill. The OPNsense bootstrap decision
+rejected exactly the mechanism — a seeded config.xml — that the SPIKE above just confirmed
+is real, current, and how OPNsense itself recommends scripted deployment. Code written
+against the old boundary before this reversal is recorded would contradict the plan it
+claims to implement, which is what `AGENTS.md` requires this entry to prevent.
+How: [The OPNsense bootstrap is manual, and the boundary is stated in the runbook]
+(#the-opnsense-bootstrap-is-manual-and-the-boundary-is-stated-in-the-runbook) now carries
+a `Replaced by:` line pointing here. [The manual/code boundary is interface assignment
+and addressing, not VLANs](#the-manualcode-boundary-is-interface-assignment-and-addressing-not-vlans)
+is amended, not retracted — its finding that no provider resource assigns or addresses an
+interface still holds, and is the reason the assignment now has to be baked into a
+template rather than typed once; only who performs that step changes. Milestone 9 runs
+before Milestone 8 despite its higher number, because the point is a zero-touch build to
+run the proof on, not a retrofit after it — Milestone 8's own heading says so, and every
+task in it that assumed a manual OPNsense bootstrap (its tasks 1, 4-7) gets revised once
+Milestone 10 exists to replace them, not before.
+Secrets this milestone adds, all generated rather than typed, all living only in the
+gitignored `.env` alongside the guest passwords the earlier secrets decision already put
+there: the OPNsense root password, its API key and secret (only the secret's SHA-512-crypt
+hash reaches the committed `config.xml` template), and the Proxmox host's own root
+password and the two API tokens its first-boot hook mints. None of these are a new
+category of secret under that decision — they extend the same file.
+Rejected: leaving the two superseded decisions unmarked and adding new ones alongside
+them — `AGENTS.md` requires a rejected option to stay rejected until its entry is
+replaced, and the manual bootstrap decision explicitly rejected the mechanism this
+milestone now adopts. Two decisions in the same file giving opposite answers to the same
+question is worse than either answer alone.
+
+### SPIKE: the host's network exists in stages — provider DHCP, then a build network, then VLAN 10
+
+Why: Milestone 10 moves the whole build onto the Proxmox host (decision 38), so the host
+needs a real, working network at every point it makes a connection, in the order it
+connects: a bare uplink at install time, a network Packer's builds can actually reach
+before OPNsense exists to route anything, and finally its own tagged address on VLAN 10
+once `vmbr1` exists. As written, none of the three holds. `proxmox/answer.toml`'s
+`[network]` section named a static address (`10.10.10.2/24`) with gateway `10.10.10.1` —
+a VM that does not exist at install time. Both Windows Packer sources sit their build VM
+on `vmbr0` under a comment calling it "the trunk bridge", while `terraform/variables.tf`
+already treats `vmbr0` as WAN. And OPNsense's own build source disables the guest agent
+and sets no `ssh_host`, so Packer has no way to address that build VM at all.
+How: researched live (2026-09-13), each finding checked against a current source rather
+than assumed:
+- Proxmox's answer-file schema documents exactly two `[network]` sources:
+  `from-dhcp` (every other network key forbidden) and `from-answer` (static, needs
+  `cidr`/`gateway`/`dns`) — confirmed against the wiki page directly, the same source
+  Milestone 9 task 9 already pulled the rest of the schema from. Rented bare-metal
+  providers configure the primary NIC by DHCP automatically at install (confirmed for
+  Scaleway's own Elastic Metal docs specifically — a public IPv4 is assigned and the
+  primary interface configures itself via DHCP; only a manually *added* interface needs
+  a `dhclient` nudge). `answer.toml` therefore moves to `source = "from-dhcp"` with no
+  `cidr`/`gateway` at all.
+- Proxmox VE's networking stack (`ifupdown2`, default since 7.0) creates a VLAN-aware
+  bridge with two lines on the bridge itself — `bridge-vlan-aware yes` and
+  `bridge-vids 2-4094` — and a host-side tagged address as a `<bridge>.<vlan>`
+  sub-interface (`vmbr1.10`), applied live with `ifreload -a`, no reboot needed —
+  confirmed against the current Network Configuration wiki page and cross-checked
+  against independent current guides using the identical pattern.
+- `/etc/pve/pve-root-ca.pem` is the real file a local API client has to trust: copy it
+  into `/usr/local/share/ca-certificates/` (renamed `.crt`) and run
+  `update-ca-certificates` — confirmed against the Certificate Management wiki page.
+  Whether the default `pve-ssl.pem`'s SAN list actually covers `localhost` or the
+  configured FQDN closely enough for that trust to be sufficient is *not* confirmed by
+  that page or anything else checked — left as a residual unknown below, not assumed.
+- An empty OPNsense `<filter>` blocks inbound access to the firewall's own management
+  service on any interface that is not flagged `<lan>` — the automatic anti-lockout rule
+  only ever attaches to whichever interface holds that specific role, and
+  `packer/files/config.xml` gives none of `opt1`/`opt2`/`opt3` that role (confirmed
+  against OPNsense/pfSense anti-lockout documentation and a live OPNsense issue —
+  opnsense/core#7372 — describing exactly this interface-scoping behavior). So
+  `10.10.10.2` reaching OPNsense's own API on `opt1` (`10.10.10.1:443`) needs an
+  explicit rule exactly like every other cross-VLAN access in this project, not
+  something the empty ruleset already grants because the traffic is "local." This is a
+  real gap in `opnsense/firewall.tf` that predates this milestone, not new scope
+  invented for it — task 6 closes it.
+Confirmed: every bullet above against a current, named source, the same discipline every
+prior SPIKE in this project has used — nothing here is carried over from the older,
+now-wrong `answer.toml`/Packer-source assumptions without being re-checked.
+
+The decision:
+1. **Install-time network** — `proxmox/answer.toml` moves to `source = "from-dhcp"`: the
+   provider's uplink, not a lab address. This removes the nonexistent-gateway bug
+   outright rather than patching its value.
+2. **`vmbr1` and the host's own `10.10.10.2`** are created by the host-side runner's
+   first stage over SSH (task 8), not `proxmox/first-boot-hook.sh`. The hook stays a
+   single-purpose appliance script minting two API tokens and nothing else — growing it
+   into general host network configuration repeats exactly the reasoning decision 34
+   already rejected once for "the hook running the whole build." Doing it from the
+   runner instead also means the same script works whether Proxmox came from the
+   prepared ISO or from Scaleway's own Proxmox VE catalog image for the Beryllium range
+   (real and current, confirmed while researching this) — neither path depends on the
+   first-boot hook running at all.
+3. **Where build VMs attach** — a third bridge, `vmbr2`, internal-only, VLAN-unaware,
+   carrying one flat, disposable subnet (`10.10.99.0/24`) that exists only because a
+   Packer build needs somewhere to put a VM before OPNsense exists to route anything.
+   The runner starts a small `dnsmasq` bound to it before calling `packer build`. This
+   is deliberately not VLAN 10: `docs/network-design.md` states plainly that Management
+   "gets no DHCP scope of any kind," and routing build traffic onto the same bridge as
+   the host's own permanent address would either contradict that sentence or carve an
+   exception into it for a need that disappears the moment the templates exist.
+4. **How each build VM is addressed on it** — the two Windows builds keep
+   `qemu_agent = true` and, once task 4 fixes the ordering bug that installs the agent
+   after WinRM was supposed to already be reachable, discover their real address through
+   the agent the way they always should have; `vmbr2`'s DHCP lease is incidental, any
+   address works. OPNsense has no agent, so its build VM's WAN NIC (`vtnet0`) gets a
+   fixed MAC in `packer/opnsense.pkr.hcl` and a matching static reservation in the
+   runner's `dnsmasq` config; the source block's `ssh_host` is set to that reserved
+   address. Nothing about `config.xml`'s actual WAN setting changes to make this work —
+   WAN is `dhcp` in both the build network and production, so build-time and shipped
+   behavior never diverge.
+Rejected: attaching build VMs to VLAN 10 directly — reuses an existing bridge instead of
+adding one, but contradicts the standing "Management has no DHCP" sentence in
+`docs/network-design.md` and leaves a build-only DHCP server running on the same
+broadcast domain as the host's own permanent address indefinitely, for a need that ends
+the moment the templates exist.
+Rejected: growing `proxmox/first-boot-hook.sh` to also build `vmbr1`/`vmbr2` — keeps
+everything in one appliance script, but repeats the reasoning decision 34 already
+rejected once, and stops working the moment Proxmox comes from the provider's own
+catalog image instead of the prepared ISO.
+Rejected: a raw FAT32 disk image in place of `vmbr2` for OPNsense's build-time
+reachability — solves a different, already-tracked unknown (whether the config-importer
+reads an ISO9660 volume at all) and has nothing to do with SSH reachability during the
+build; not applicable here.
+Residual unknown, left for the Milestone 8 proof run: whether Proxmox's default
+self-signed certificate actually carries `localhost` or the node's configured FQDN in
+its SAN closely enough for `insecure_skip_tls_verify = false` to validate once
+`pve-root-ca.pem` is trusted. Task 8 points `PROXMOX_VE_ENDPOINT`/`PKR_VAR_proxmox_url`
+at the node's own configured name (`pve.silab.internal`, with a `/etc/hosts` entry
+since no DNS exists yet) rather than `localhost`, on the reasoning that this is the name
+Proxmox's own cert-generation step signs for — inference from how Proxmox is documented
+to behave at install time, not a confirmed fact about `pve-ssl.pem`'s actual SAN list.
+
+### SPIKE: Terraform starts each Bootstrap script and lets go; a bash poll loop on the host watches phase.json
+
+Why: the Terraform handoff runs each Bootstrap script synchronously over WinRM today.
+DC01's first phase removes and re-adds its only address — a brief local interruption
+that can drop the very WinRM session `remote-exec` is blocked on — and its promotion
+phase reboots the guest inside that same blocking command. Either one kills the
+session mid-command, which fails the provisioner, taints the resource, and makes the
+next `terraform apply` try to destroy and recreate a half-built domain controller.
+Something then has to know when every phase on every guest has finished and run
+`Test-SILab.ps1`, from a Linux host with no PowerShell of its own.
+How: researched live (2026-09-13) and read directly against this project's own code
+where the answer already existed rather than designed from scratch:
+- Terraform's WinRM/SSH provisioners have no built-in way to survive a connection
+  dropped mid-command by a guest reboot — a known, long-standing, unresolved class of
+  issue (checked against multiple current `hashicorp/terraform` issue threads
+  describing exactly this DC01-shaped scenario: run a command, reboot, run more
+  commands, all in one provisioner). The mitigation the community actually uses is
+  always the same shape: separate "start something that survives its own reboot" from
+  "wait for it" — never one blocking call spanning the reboot.
+- Windows already gives this project the "start" half for free: `Start-Process
+  -WindowStyle Hidden` launches a detached child process and returns immediately, so
+  one WinRM command that calls `Start-Process powershell.exe -ArgumentList
+  '...Bootstrap-DC01.ps1 ...'` completes — and lets `remote-exec` return successfully —
+  before the child ever reaches its first reboot. This is ordinary, version-independent
+  Windows process behavior, not something to verify against a pin.
+- The completion signal already exists and needs no new file: `Set-SILabPhase`
+  (Milestone 6, `powershell/SILab.psm1`) already writes
+  `C:\ProgramData\SILab\phase.json` with the current phase number, before any call that
+  reboots — built for the resume mechanism, not for this milestone, but it is exactly
+  the signal this task went looking for. Read directly, not assumed: DC01's terminal
+  phase is 5 (`Bootstrap-DC01.ps1`).
+- `Register-SILabResumeTask` (same module) registers its resume trigger with **no
+  credential in its argument list** — `-File $PSCommandPath`, nothing else — because
+  every phase after the one that reboots needs no credential at all
+  (credential-ordering decision). Read directly from `powershell/SILab.psm1` and
+  `Bootstrap-DC01.ps1`, not assumed. So the specific risk this task's own "reject any
+  [mechanism] that writes them to disk" warning is aimed at — a scheduled task created
+  with sensitive arguments baked into its own on-disk definition — was never how this
+  project resumes a script; it only becomes a real risk if the *initial*, credentialed
+  launch used a scheduled task instead of `Start-Process`, which is exactly what gets
+  rejected below.
+- `terraform_data` (built into Terraform since 1.4, well under the pinned 1.16.1) is
+  the current, official replacement for `null_resource` and supports its own
+  `connection`/`provisioner` blocks — confirmed against current Terraform documentation
+  — so a WinRM check *could* be wired into `terraform/` itself. But reusing it for the
+  actual polling loop still means invoking `terraform apply` once per poll attempt, a
+  full provider-init/state-lock/plan/apply cycle to run what is really one remote
+  command. `pywinrm` was the other named candidate; nothing in its own GitHub
+  repository (README, releases) gave a confirmable maintenance signal as of this check.
+- Decision: neither. The host-side runner (task 8) is bash, already on the one machine
+  with a direct route to every guest, and needs exactly one thing from WinRM twice over:
+  run a command, get its output — to poll `phase.json` and to run `Test-SILab.ps1`. That
+  is a single HTTP request with NTLM auth, not a session Terraform or a Python library
+  needs to manage. `curl --ntlm` (present on any Debian host already, nothing new to
+  pin) issues that request directly, using the same `use_ntlm = true` /
+  unencrypted-transport choice `terraform/vm-dc01.tf`'s own `connection` block already
+  made and documented for port 5985.
+The decision:
+1. Every guest's `remote-exec` provisioner changes to launch its Bootstrap script via
+   `Start-SILabDetached` (`powershell/SILab.psm1`) and returns — Terraform's job ends
+   there, exactly as task 7 puts it: the guest already drives itself across reboots by
+   design, Terraform only needs to start it and get out of the way. See the correction
+   below on why this is a one-shot scheduled task, not `Start-Process`.
+2. The host-side runner polls each guest's `phase.json` by repeatedly applying that
+   guest's `terraform_data` resource (`terraform/wait-for-guests.tf`) with `-replace`,
+   in a bash loop with a sleep between attempts. See the second correction below on why
+   this is `terraform_data`, not `curl --ntlm`. A failed attempt — the guest is
+   mid-reboot and unreachable, or not yet on its terminal phase — is just a nonzero
+   `terraform apply` retried on the next iteration, never a tainted resource, because
+   `wait_dc01`/`wait_srv01`/`wait_cl01` are their own resources, entirely separate from
+   the guest VMs themselves.
+3. Once every guest's phase file reports its terminal phase, the runner runs
+   `Test-SILab.ps1` on DC01 the same way (task 10 adds that `terraform_data` resource);
+   its exit code becomes the whole deployment's exit code.
+Rejected: `pywinrm` — works, but adds a pip dependency and a Python runtime to a host
+this project otherwise provisions with exactly two pinned, checksum-verified static
+binaries and nothing else; its maintenance status could not be confirmed live, which
+disqualifies it on its own given every other tool in this repo is checked against its
+current, live state before being trusted.
+Residual unknown: whether repeatedly `-replace`ing a `terraform_data` resource behaves
+exactly like a fresh, independent connection attempt every time, with no leftover state
+from a prior failed attempt affecting the next one, is unverified until the proof run —
+plausible from how `-replace` is documented to force recreation, but not something to
+overstate confidence in without a live guest to poll against.
+
+Correction, found while implementing task 7 (2026-09-13): `Start-Process` does not
+work, and this SPIKE was wrong to pick it. A real, open `PowerShell/PowerShell#16001`
+issue — "Remote sessions terminate Start-Process-launched processes on exit" — confirms
+that a process started directly inside a WinRM/PSRemoting shell is a member of that
+shell's Windows job object, and Windows job objects kill every member the instant the
+job's last handle closes. Terraform's `remote-exec` closes the WinRM shell right after
+the command it ran returns — which, for a `Start-Process` call that succeeds and
+returns immediately, is essentially the same moment the detached child was created. The
+mechanism this SPIKE chose to make the provisioner "return at once" is the exact
+mechanism that gets the detached child killed at that same instant, not a separate
+concern from it.
+The actual fix is the one this SPIKE rejected: a scheduled task. Task Scheduler spawns
+its own process tree outside any caller's job object entirely, which is *why* it
+escapes this problem where `Start-Process` cannot — confirmed independently twice, not
+inferred once: Packer's own `windows-restart`/elevated-command provisioner uses a
+scheduled task (`elevated-template.ps1`) for exactly this reason, and Ansible's own
+Windows documentation names a scheduled task as the standard way to run something over
+WinRM that needs to outlive the calling session. This SPIKE's original objection —
+"a scheduled task persists its argument string, credential included, to disk" — still
+holds, and is not avoidable: no channel from a WinRM-connected process to a
+Task-Scheduler-spawned one avoids disk entirely, since they share no memory and Task
+Scheduler has no "pass this argument once, store nothing" mode. `Start-SILabDetached`
+minimizes rather than eliminates the exposure: it registers the task, starts it,
+confirms (by polling `State -eq 'Running'`) that the real process has actually been
+created, and deletes the task definition immediately afterward — deleting a task does
+not stop an instance already running, since that instance is by then a child of the
+Task Scheduler service, not of the definition being deleted. The credential sits in a
+file on disk for at most a couple of hundred milliseconds, never across a reboot and
+never as standing state, which is the narrowest exception to "no credential is ever
+written to the guest's disk" this project has taken — a real exception, not a loophole
+argued around it, since a task definition is unambiguously a file. `on_failure =
+"continue"` on the provisioner was considered as an alternative fix and rejected: it
+stops a genuinely dead reboot-interrupted connection from tainting the resource, but
+the provisioner still blocks for up to its own connection `timeout` (10 minutes) before
+giving up, which fails task 7's actual Accept criterion — "no provisioner waits" —
+even though it would have solved the tainting half well enough on its own.
+
+Second correction, found while implementing task 8 (2026-09-13): the polling half of
+this SPIKE was also wrong, for a more basic reason than the launch half was — `curl
+--ntlm` cannot poll `phase.json` at all. WinRM is a SOAP-over-HTTP protocol
+(WS-Management): reading a remote file means a `CreateShell` call, a `Command` call
+naming what to run, one or more `Receive` calls for its output, then `Signal` and
+`Delete` to close the shell, each its own XML envelope with its own message IDs. `curl
+--ntlm` only carries the transport and the NTLM handshake underneath that exchange; it
+has no idea the exchange needs to happen at all. Realizing this while writing the
+runner's actual poll loop, not while researching the SPIKE, is exactly the gap "confirm
+this works, don't assume it" is supposed to catch, and here it caught a decision that
+sounded plausible but was never actually tested against what `curl` does and does not
+speak.
+The fix reaches back into the two rejected alternatives, not past them: `terraform_data`
+resources (`terraform/wait-for-guests.tf`), one per guest, each with the same WinRM
+`connection` block its own guest resource already has and a `remote-exec` provisioner
+that reads `phase.json` and exits non-zero unless the number has reached that guest's
+terminal phase. The host-side runner polls with `terraform apply
+-target=terraform_data.wait_dc01 -replace=terraform_data.wait_dc01` (and the same for
+`wait_srv01`/`wait_cl01`) in a bash loop with a sleep between attempts — `-replace`
+forces a fresh connection attempt and a fresh provisioner run every time, exactly the
+"retry" this needs, and Terraform's own exit code (0 once the phase check passes, or
+whenever the guest is unreachable) is the only thing the loop has to inspect. The
+overhead this SPIKE worried about — a provider-init/plan/apply cycle per attempt — is
+real but was weighed wrong the first time: a few seconds of Terraform overhead against
+a multi-minute reboot wait is not the cost this SPIKE should have optimized away, a
+working polling mechanism is. `pywinrm`'s rejection stands for its own, separate
+reason (unconfirmable maintenance) and was never really in competition with `curl` on
+correctness — both get rejected now, for different reasons, and `terraform_data` is
+the one candidate left that was already proven to actually speak WinRM, because it is
+the exact mechanism `terraform/vm-dc01.tf` already depends on today.
+
+### The Packer/Terraform build runs on the Proxmox host itself; deploy.sh is a thin SSH wrapper around it
+
+Why: decision 34 put `scripts/deploy.sh` on the operator's workstation, driving Packer
+and Terraform against the Proxmox API remotely, and had the first-boot hook's tokens
+travel to the operator over SSH for exactly that reason. Both halves turn out to be
+wrong once OPNsense is actually part of the topology: Packer's WinRM communicator and
+Terraform's WinRM provisioner both connect directly, with no bastion/jump-host option —
+checked against both tools' current connection documentation, not assumed from how
+other tools behave — and once the lab's guests sit behind OPNsense on
+`10.10.20.0/24`/`10.10.30.0/24`, only the Proxmox host has a route to them. An
+operator's laptop reaching in over the internet has none, short of standing up a VPN or
+port-forward this project has no other reason to build.
+How:
+1. `scripts/deploy.sh`, run on the operator's own machine with the rented server's
+   address as its argument, copies the repository plus `.env` to the host over SSH and
+   invokes the host-side runner (task 8) there. It never calls `packer` or `terraform`
+   itself, and needs nothing installed beyond an SSH client.
+2. The two Proxmox API tokens no longer need to leave the host at all: the runner reads
+   `/root/proxmox-api-tokens.txt` directly — it already runs as root, on the box the
+   file is on — merges its two lines into the host's own `.env`, and deletes the token
+   file. `scripts/deploy.sh` never touches them; the "travel to the operator over SSH"
+   half of decision 34 is what this entry actually supersedes.
+3. Renting and releasing the server stay exactly as manual as Milestone 8 already
+   planned — nothing here adds a provider API key to `.env`, and nothing automates
+   either end of the machine's lifecycle. `deploy.sh` starts once the host answers SSH
+   and ends by printing the reminder to release it (task 10).
+4. Every installation ISO downloads on the host itself, never across the operator's own
+   connection — task 5 — from URLs and checksums in a non-secret var file, never `.env`.
+Rejected: keeping orchestration on the operator's workstation and adding a WireGuard
+tunnel or SSH port-forwards into the lab's VLANs — solves reachability, but adds a
+second piece of standing infrastructure (a tunnel, its own keys, its own firewall rule)
+for a build this project runs once and tears down, and removes none of the complexity
+this milestone exists to remove.
+Rejected: driving the build through the Proxmox API's own remote surface (`pvesh`/the
+REST API) as a jump point from the operator's machine — the API can create and manage
+VMs remotely, but Packer's and Terraform's own communicators still need a direct
+network path to the guest for WinRM, which the API does not provide.
+Rejected: automating the rental and release of the server through the hosting
+provider's own API — renting and releasing were never the slow or error-prone half of
+this milestone, and automating them would put a provider API key somewhere this
+project has to keep it, which is exactly the credential the secrets decision keeps out
+of `.env`. Both stay a human clicking a button in the provider's console.
+Rejected: uploading ISOs from the operator's workstation — the default implication of
+every earlier plan; explicitly rejected now that the build runs on the host anyway,
+since datacenter-to-datacenter bandwidth for four multi-gigabyte images strictly beats
+routing them through a home connection while the server bills by the hour.
+See also [SPIKE: the host's network exists in stages](#spike-the-hosts-network-exists-in-stages--provider-dhcp-then-a-build-network-then-vlan-10)
+and [SPIKE: Terraform starts each Bootstrap script and lets go](#spike-terraform-starts-each-bootstrap-script-and-lets-go-a-bash-poll-loop-on-the-host-watches-phasejson),
+the two SPIKEs this entry closes out alongside its own finding.

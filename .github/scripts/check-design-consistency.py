@@ -1,15 +1,9 @@
 #!/usr/bin/env python3
 """Fail if the code disagrees with the design documents about MACs or addresses.
 
-The MAC address is the interface between the two Terraform roots: terraform/ pins it
-on a VM's NIC and opnsense/ keys a DHCP reservation on it. Change one side alone and
-the guest boots unreachable, with nothing in a plan or a validate run to explain why.
-The same values are also written by hand in terraform/outputs.tf, a third place.
-
-Rather than compare the roots to each other, every literal is checked against the
-design document that owns it. AGENTS.md already requires changing the document first,
-so anchoring there means the roots agree with each other as a consequence, and a
-value invented in code fails even if both roots happen to share the invention.
+Rather than compare terraform/ and opnsense/ to each other directly, every literal is
+checked against the design document that owns it — a value invented in code fails even
+if both roots happen to share the invention.
 
 Run locally with: python3 .github/scripts/check-design-consistency.py
 """
@@ -26,8 +20,8 @@ OWNERS = {
 }
 
 # Where the values get used.
-CODE_DIRS = ("terraform", "opnsense")
-CODE_SUFFIXES = (".tf", ".pkr.hcl")
+CODE_DIRS = ("terraform", "opnsense", "packer", "proxmox", "scripts")
+CODE_SUFFIXES = (".tf", ".pkr.hcl", ".xml", ".toml", ".sh")
 
 MAC_RE = re.compile(r"\b([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})\b")
 # Lab address space only. The WAN side is a real home or provider network and is
@@ -56,9 +50,7 @@ def main():
                 continue
             rel = path.relative_to(ROOT)
             for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-                # MACs are compared case-insensitively on purpose: terraform/ writes
-                # them uppercase and opnsense/ lowercase, which DHCP does not care
-                # about and which is not worth a failing build.
+                # Compared case-insensitively: terraform/ writes uppercase, opnsense/ lowercase.
                 for mac in MAC_RE.findall(line):
                     if mac.lower() not in macs:
                         failures.append((rel, lineno, "MAC", mac, "docs/conventions.md"))

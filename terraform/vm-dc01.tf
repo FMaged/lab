@@ -1,5 +1,4 @@
-# Looked up by name, not a hardcoded VMID — bumping to -v2 is then a one-line
-# change here, not a search-and-replace. Shared with vm-srv01.tf.
+# Looked up by name, not VMID, so a -v2 bump is a one-line change. Shared with vm-srv01.tf.
 data "proxmox_virtual_environment_vms" "winsrv2025_template" {
   filter {
     name   = "name"
@@ -10,8 +9,7 @@ data "proxmox_virtual_environment_vms" "winsrv2025_template" {
     values = [true]
   }
 
-  # Without this, a missing/renamed template fails on vms[0] with an
-  # index-out-of-range error naming neither the template nor the cause.
+  # Without this, a missing/renamed template fails on vms[0] with an unhelpful index error.
   lifecycle {
     postcondition {
       condition     = length(self.vms) == 1
@@ -31,16 +29,11 @@ resource "proxmox_virtual_environment_vm" "dc01" {
     full  = true
   }
 
-  # Restated explicitly rather than relied on as clone inheritance — the
-  # provider's clone guide isn't fully specific about what inherits, and a
-  # documented issue exists where a full clone dropped source config. Matches
-  # packer/windows-server-2025.pkr.hcl's source block exactly.
+  # Restated rather than relied on as clone inheritance — a documented provider issue drops source config on full clones.
   machine = "q35"
   bios    = "ovmf"
 
-  # "4m" is required for Secure Boot (provider default is "2m"); pre_enrolled_keys
-  # defaults to false. Neither inherits from the template, so both are set
-  # explicitly here on every UEFI guest (bpg/proxmox 0.112.0 docs).
+  # "4m" required for Secure Boot; neither this nor pre_enrolled_keys inherits from the template.
   efi_disk {
     datastore_id      = var.guest_datastore
     type              = "4m"
@@ -56,13 +49,13 @@ resource "proxmox_virtual_environment_vm" "dc01" {
   }
 
   agent {
-    enabled = true # unlike OPNsense, this image has qemu-guest-agent installed.
+    enabled = true
   }
 
   disk {
     datastore_id = var.guest_datastore
     interface    = "scsi0"
-    size         = 80 # matches the template's own disk size in packer/windows-server-2025.pkr.hcl.
+    size         = 80 # matches packer/windows-server-2025.pkr.hcl's template disk size
   }
 
   network_device {
@@ -71,14 +64,7 @@ resource "proxmox_virtual_environment_vm" "dc01" {
     mac_address = "02:00:00:00:00:C9" # docs/conventions.md — VMID 201.
   }
 
-  # Terraform's last act: bring the guest up, then hand off to powershell/
-  # (never AD commands inline — terraform-proxmox skill). Host is DC01's
-  # DHCP-reservation address, its only address until first boot makes it
-  # static (opnsense/dhcp.tf task 3).
-  #
-  # https=false + use_ntlm=true: the template has no cert for HTTPS, but NTLM
-  # still encrypts the payload on port 5985 — setting only one of the two would
-  # send the password across base64-encoded but unencrypted.
+  # https=false + use_ntlm=true: no cert for HTTPS, but NTLM still encrypts the payload on port 5985.
   connection {
     type     = "winrm"
     host     = "10.10.20.10"
@@ -94,11 +80,11 @@ resource "proxmox_virtual_environment_vm" "dc01" {
     destination = "C:/lab-provisioning"
   }
 
-  # SafeModeAdminPassword is DC01-only — SRV01/CL01 have no forest to
-  # recover, so neither invocation takes this argument.
+  # Launches detached (Start-SILabDetached) and returns at once — waiting directly would let this
+  # shell's WinRM job object kill Bootstrap-DC01.ps1 the moment the command "succeeds" and closes.
   provisioner "remote-exec" {
     inline = [
-      "powershell -ExecutionPolicy Bypass -File C:/lab-provisioning/Bootstrap-DC01.ps1 -LocalAdminPassword '${local.ps_local_admin_password}' -DomainAdminPassword '${local.ps_domain_admin_password}' -SafeModeAdminPassword '${local.ps_dsrm_recovery_password}'",
+      "powershell -ExecutionPolicy Bypass -Command \"Import-Module C:/lab-provisioning/SILab.psm1 -Force; Start-SILabDetached -ScriptPath 'C:/lab-provisioning/Bootstrap-DC01.ps1' -LocalAdminPassword '${local.ps_local_admin_password}' -DomainAdminPassword '${local.ps_domain_admin_password}' -SafeModeAdminPassword '${local.ps_dsrm_recovery_password}'\"",
     ]
   }
 }

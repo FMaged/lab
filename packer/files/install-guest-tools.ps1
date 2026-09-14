@@ -1,6 +1,5 @@
-# Driver ISO comes from the source block's additional_iso_files. Finds the
-# CD-ROM dynamically rather than assuming a letter — same reason the answer
-# files hedge their driver paths across D:/E:/F:.
+# Finds the CD-ROM dynamically rather than assuming a letter, same as the answer files' driver paths.
+# The answer file's FirstLogonCommands already runs this install once; this is an idempotent retry.
 $ErrorActionPreference = 'Stop'
 
 $installer = Get-Volume |
@@ -15,10 +14,8 @@ if (-not $installer) {
 
 Write-Host "Installing guest tools from $installer"
 
-# -PassThru catches the exit code — a native installer doesn't set $LASTEXITCODE
-# via Start-Process, so a failed install would otherwise be silent (and the first
-# symptom would be Terraform hanging on `agent { enabled = true }`). 3010 means
-# success, reboot required, expected with /norestart.
+# -PassThru catches the exit code - Start-Process doesn't set $LASTEXITCODE for native installers.
+# 3010 means success, reboot required, expected with /norestart.
 $process = Start-Process -FilePath $installer -ArgumentList '/install', '/quiet', '/norestart' `
     -Wait -NoNewWindow -PassThru
 

@@ -1,6 +1,5 @@
-# Kea serves two VLANs for different reasons (PLAN.md bootstrap addressing) and is
-# subnet-based, not interface-tied — unconfirmed whether OPNsense also needs a
-# manual per-interface toggle; flag it at the proof run if so.
+# Kea is subnet-based, not interface-tied — unconfirmed whether OPNsense also needs a manual
+# per-interface toggle.
 
 resource "opnsense_kea_dhcpv4_subnet" "clients" {
   subnet      = "10.10.30.0/24"
@@ -18,8 +17,7 @@ resource "opnsense_kea_dhcpv4_reservation" "cl01" {
   description = "CL01 — mandatory reservation, not a static host; see docs/network-design.md"
 }
 
-# No `pools` — reservation-only, so an unknown MAC gets nothing. DC01/SRV01 only
-# need this subnet until Terraform's WinRM handoff; PowerShell makes it static after.
+# No `pools` — reservation-only, so an unknown MAC gets nothing.
 resource "opnsense_kea_dhcpv4_subnet" "servers" {
   subnet      = "10.10.20.0/24"
   description = "Servers VLAN — reservation-only, no pool. See the bootstrap addressing decision in PLAN.md."
